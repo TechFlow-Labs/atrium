@@ -43,7 +43,7 @@ import { withUser } from "@/server/db/client";
 import { sql } from "drizzle-orm";
 import type { ProviderId } from "@/server/integrations/types";
 import { parseMotionEnabled } from "@/lib/apply-theme";
-import { GUIDES, type GuideId } from "@/lib/screen-guides";
+import { resolveGuide } from "@/lib/screen-guides";
 import { saveProfilePreferences, setOnboardingPending } from "@/server/onboarding/service";
 import { OAUTH_PROVIDERS } from "@/lib/oauth-providers";
 import { deleteOAuthApp, saveOAuthApp } from "@/server/integrations/oauth-apps";
@@ -825,8 +825,8 @@ export async function completeOnboardingAction(): Promise<void> {
 export async function markGuideSeenAction(guideId: string, version: number): Promise<void> {
   const user = await userId();
   // Only the current version of a known guide can be recorded.
-  const guide = Object.hasOwn(GUIDES, guideId) ? GUIDES[guideId as GuideId] : undefined;
-  if (!guide || guide.version !== version) return;
+  const guide = resolveGuide(guideId, version);
+  if (!guide) return;
   await markGuideSeen(user, guide.id, guide.version);
 }
 

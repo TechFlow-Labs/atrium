@@ -117,7 +117,7 @@ export function OnboardingWizard(props: Props) {
             <div className="space-y-6">
               <StepHeading
                 title="You are set up"
-                body="Anything you skipped is still available in Settings, Workspaces, and Integrations. Atrium will now show a short tour of each screen the first time you open it."
+                body="Anything you skipped is still available in Settings, Workspaces, and Integrations. Atrium will walk you through the main screens once when you open the app."
               />
               <div className="flex items-center justify-between gap-2">
                 <Button type="button" variant="outline" onClick={back}>

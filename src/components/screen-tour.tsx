@@ -1,11 +1,12 @@
 "use client";
 
+import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Button } from "@/components/ui/button";
 import type { TourStep } from "@/lib/screen-guides";
 
-const LOCATE_ATTEMPTS = 20;
+const LOCATE_ATTEMPTS = 40;
 const LOCATE_INTERVAL_MS = 150;
 const CARD_WIDTH = 360;
 const CARD_GAP = 14;
@@ -13,9 +14,12 @@ const CARD_HEIGHT_ESTIMATE = 230;
 const SPOTLIGHT_PADDING = 8;
 const VIEWPORT_MARGIN = 16;
 
-// Walks through a screen's tour steps, highlighting each target and
-// explaining it. Steps whose target never appears (for example, an empty
-// list or a hidden mobile sidebar) are skipped.
+function pathMatches(pathname: string, href: string): boolean {
+  return pathname === href || pathname.startsWith(`${href}/`);
+}
+
+// Walks through tour steps, navigating when a step sets `href`, highlighting
+// each target, and skipping steps whose target never appears.
 export function ScreenTour({
   steps,
   onClose,
@@ -23,6 +27,8 @@ export function ScreenTour({
   steps: TourStep[];
   onClose: (reason: "finished" | "skipped") => void;
 }) {
+  const router = useRouter();
+  const pathname = usePathname();
   const [index, setIndex] = useState(0);
   const [rect, setRect] = useState<DOMRect | null>(null);
   const targetRef = useRef<HTMLElement | null>(null);
@@ -46,13 +52,17 @@ export function ScreenTour({
     [finish, index, total],
   );
 
-  // Find the current step's target, wait briefly for it to render, and skip
-  // the step when it never does.
+  // Navigate to the step's screen when needed, then locate the target.
   useEffect(() => {
     if (!step) return;
     let attempts = 0;
     let timer: number | undefined;
     let cancelled = false;
+
+    if (step.href && !pathMatches(pathname, step.href)) {
+      router.push(step.href);
+      return;
+    }
 
     function locate() {
       if (cancelled) return;
@@ -87,7 +97,7 @@ export function ScreenTour({
       cancelled = true;
       if (timer !== undefined) window.clearTimeout(timer);
     };
-  }, [step, advance]);
+  }, [step, pathname, router, advance]);
 
   // Keep the spotlight on its target while the page scrolls or resizes.
   useEffect(() => {

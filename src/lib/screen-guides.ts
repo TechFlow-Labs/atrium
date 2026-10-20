@@ -1,13 +1,11 @@
-// Screen guides explain each screen the first time a user opens it. The intro
-// is shown in a dialog, then a spotlight tour highlights the core parts of the
-// screen one at a time.
+// The first-login app tour walks through Atrium once. Per-screen guides stay
+// available for the help button's optional "this screen" restart, but they are
+// never auto-opened on enter.
 //
-// To change a guide, edit its copy here, then bump its `version` so users who
-// already saw it get the updated guide once. Each tour target is a
-// `data-tour="..."` attribute in the source. The guide test fails when a target
-// is missing from the source, and when a console route has no guide.
-// Adding a screen means adding an entry to GUIDES, and a DETAIL_GUIDES entry
-// if it has a detail page.
+// To change the app tour, edit APP_TOUR and bump its `version` so users who
+// already finished it see the update once. Each tour target is a
+// `data-tour="..."` attribute in the source. Steps may set `href` so the tour
+// navigates before looking for the target.
 
 export type TourStep = {
   // Matches a `data-tour` attribute. Steps whose target is not on screen are
@@ -15,6 +13,8 @@ export type TourStep = {
   target: string;
   title: string;
   body: string;
+  // Optional console path to open before locating the target.
+  href?: string;
 };
 
 export type ScreenGuide = {
@@ -25,54 +25,139 @@ export type ScreenGuide = {
   tour: TourStep[];
 };
 
-// The header and sidebar appear on every screen, so they are explained once,
-// at the start of the first screen a user opens.
 const SHELL_TOUR: TourStep[] = [
   {
+    href: "/home",
     target: "sidebar",
     title: "Navigation",
     body: "Every screen is listed here. Use Edit at the bottom of the sidebar to change the order.",
   },
   {
+    href: "/home",
     target: "workspace-switch",
     title: "Workspace",
     body: "Switch workspaces or contexts here. Everything you see belongs to the workspace shown.",
   },
   {
+    href: "/home",
     target: "search",
     title: "Search",
     body: "Find projects by name and tasks by title or description in the current workspace.",
   },
   {
+    href: "/home",
     target: "create",
     title: "Create",
     body: "Add a new task or project from here.",
   },
   {
+    href: "/home",
     target: "guide-help",
-    title: "Guide",
-    body: "Reopen the guide and its tour for any screen from here.",
+    title: "Tour",
+    body: "Reopen this tour any time from here.",
   },
 ];
+
+// Shown once after the first successful login (or after onboarding ends).
+export const APP_TOUR: ScreenGuide = {
+  id: "app",
+  version: 2,
+  title: "Welcome to Atrium",
+  intro:
+    "Atrium is one place for personal and work projects. This short tour walks through the main screens once. You can reopen it later from the help button in the header.",
+  tour: [
+    ...SHELL_TOUR,
+    {
+      href: "/home",
+      target: "home-stats",
+      title: "Attention counts",
+      body: "These counts show work that needs attention, is due this week, is blocked, or was finished recently. Select one to open the matching task list.",
+    },
+    {
+      href: "/home",
+      target: "home-panels",
+      title: "Priority panels",
+      body: "Lists of the most urgent work. Each panel links to its full task list.",
+    },
+    {
+      href: "/projects",
+      target: "projects-board",
+      title: "Projects",
+      body: "Projects group related tasks. Native projects are edited here. Provider-linked projects mirror issues from Linear, Jira, GitHub, GitLab, or Gitea.",
+    },
+    {
+      href: "/tasks",
+      target: "task-filters",
+      title: "Tasks",
+      body: "Search and filter every task you can see across the workspace.",
+    },
+    {
+      href: "/tasks",
+      target: "task-view",
+      title: "List and board",
+      body: "Switch between a list and a board grouped by status.",
+    },
+    {
+      href: "/schedule",
+      target: "schedule-body",
+      title: "Schedule",
+      body: "Dated work appears here. Tasks without a due date do not show on this screen.",
+    },
+    {
+      href: "/chats",
+      target: "chats-feed",
+      title: "Chats",
+      body: "Today's messages from Slack channels the bot has been invited to. Atrium only reads messages.",
+    },
+    {
+      href: "/notes",
+      target: "notes-list",
+      title: "Notes",
+      body: "Markdown from an Obsidian vault, plus notes you save from the button at the bottom right. Vault files stay read-only.",
+    },
+    {
+      href: "/integrations",
+      target: "integrations-providers",
+      title: "Integrations",
+      body: "Connect providers with OAuth or a token. Only owners and admins can connect providers.",
+    },
+    {
+      href: "/sync",
+      target: "sync-health",
+      title: "Sync",
+      body: "Connection health, conflicts, and failed jobs for linked providers.",
+    },
+    {
+      href: "/workspaces",
+      target: "workspace-contexts",
+      title: "Workspaces",
+      body: "Keep projects, tasks, and people separate per workspace. Contexts group them, such as Personal and Work.",
+    },
+    {
+      href: "/settings",
+      target: "settings-appearance",
+      title: "Settings",
+      body: "Your profile, appearance, and notification choices. They apply only to your account.",
+    },
+  ],
+};
 
 export const GUIDES = {
   home: {
     id: "home",
     version: 2,
-    title: "Welcome to Atrium",
-    intro:
-      "Atrium is one place for your personal and work projects. Native tasks are edited here. Tasks from Linear, Jira, GitHub, GitLab, and Gitea stay owned by those providers, and Atrium keeps a synchronized copy. The tour starts with the layout, then covers this page.",
+    title: "Home",
+    intro: "Your workspace dashboard with attention counts and priority panels.",
     tour: [
-      ...SHELL_TOUR,
       {
         target: "home-stats",
         title: "Attention counts",
-        body: "These counts show work that needs attention, is due this week, is blocked, or was finished in the last seven days. Select one to open the matching task list.",
+        body: "These counts show work that needs attention, is due this week, is blocked, or was finished in the last seven days.",
       },
       {
         target: "home-panels",
         title: "Priority panels",
-        body: "Lists of the most urgent work: Needs attention, Due this week, and Blocked. Each panel links to its full task list.",
+        body: "Lists of the most urgent work. Each panel links to its full task list.",
       },
       {
         target: "source-filter",
@@ -85,8 +170,7 @@ export const GUIDES = {
     id: "projects",
     version: 2,
     title: "Projects",
-    intro:
-      "Projects group related tasks. Native projects are created and edited in Atrium. Projects linked from a provider mirror that provider's issues.",
+    intro: "Projects group related tasks from Atrium and connected providers.",
     tour: [
       {
         target: "project-status",
@@ -96,7 +180,7 @@ export const GUIDES = {
       {
         target: "projects-board",
         title: "Your projects",
-        body: "Each card is one project. Select a project to see its status, updates, and tasks. Create a native project from the plus button in the header.",
+        body: "Each card is one project. Select a project to see its status, updates, and tasks.",
       },
     ],
   },
@@ -104,13 +188,12 @@ export const GUIDES = {
     id: "project",
     version: 2,
     title: "Project",
-    intro:
-      "A project page shows the status of its tasks, the latest updates, and the task list. Native tasks save here. Provider-linked tasks follow the provider's rules.",
+    intro: "A project page shows status, updates, and the task list.",
     tour: [
       {
         target: "project-counts",
         title: "Status at a glance",
-        body: "Counts of tasks that need attention, are in progress, or are blocked. Select one to filter the task list.",
+        body: "Counts of tasks that need attention, are in progress, or are blocked.",
       },
       {
         target: "project-updates",
@@ -120,7 +203,7 @@ export const GUIDES = {
       {
         target: "project-manage",
         title: "Manage project",
-        body: "Admins can change the project name and nickname. For linked projects, this is also where you map provider fields and publish changes. Milestones stay with the provider.",
+        body: "Admins can change the project name and nickname, and map provider fields for linked projects.",
       },
     ],
   },
@@ -128,8 +211,7 @@ export const GUIDES = {
     id: "tasks",
     version: 2,
     title: "Tasks",
-    intro:
-      "Every task you can see across your workspace, from native projects and connected providers. Native tasks are edited here. Provider tasks show where they came from and only offer actions that the provider supports.",
+    intro: "Every task you can see across your workspace.",
     tour: [
       {
         target: "task-filters",
@@ -144,7 +226,7 @@ export const GUIDES = {
       {
         target: "new-task",
         title: "New task",
-        body: "Create a task on a native project. Viewers can read tasks. Members and above can create and edit them.",
+        body: "Create a task on a native project.",
       },
       {
         target: "task-bulk",
@@ -162,23 +244,22 @@ export const GUIDES = {
     id: "task",
     version: 2,
     title: "Task",
-    intro:
-      "A task holds its details, its discussion, and its source. Native tasks save here. For tasks from a provider, the source is shown and only the supported changes are offered.",
+    intro: "A task holds its details, discussion, and source.",
     tour: [
       {
         target: "task-form",
         title: "Details",
-        body: "Edit the title, description, status, and priority, then save. Provider tasks only allow the changes the provider supports.",
+        body: "Edit the title, description, status, and priority, then save.",
       },
       {
         target: "task-comments",
         title: "Activity",
-        body: "Comments and activity for this task. Use the comment box here to record progress or questions for your team.",
+        body: "Comments and activity for this task.",
       },
       {
         target: "task-provider",
         title: "Open in provider",
-        body: "For a provider task, this opens the original issue, where the provider's rules apply.",
+        body: "For a provider task, this opens the original issue.",
       },
     ],
   },
@@ -186,8 +267,7 @@ export const GUIDES = {
     id: "schedule",
     version: 2,
     title: "Schedule",
-    intro:
-      "Schedule shows when dated work is due. It replaces the old Calendar page, which now redirects here.",
+    intro: "Schedule shows when dated work is due.",
     tour: [
       {
         target: "schedule-nav",
@@ -197,12 +277,12 @@ export const GUIDES = {
       {
         target: "schedule-view",
         title: "Month or timeline",
-        body: "Month shows the tasks due on each day. Timeline lays tasks out over time, which helps you spot overlapping work.",
+        body: "Month shows the tasks due on each day. Timeline lays tasks out over time.",
       },
       {
         target: "schedule-body",
         title: "Dated work",
-        body: "Tasks with a due date appear here. Tasks without one do not show on this screen.",
+        body: "Tasks with a due date appear here.",
       },
     ],
   },
@@ -210,8 +290,7 @@ export const GUIDES = {
     id: "chats",
     version: 2,
     title: "Chats",
-    intro:
-      "Chats shows today's messages from the Slack channels you invited the bot to. It only reads messages. It does not post in Slack.",
+    intro: "Today's messages from Slack channels the bot has been invited to.",
     tour: [
       {
         target: "chats-feed",
@@ -221,7 +300,7 @@ export const GUIDES = {
       {
         target: "chats-manage",
         title: "Slack connection",
-        body: "Connect or manage the Slack bot on the Integrations page. Only owners and admins can connect providers.",
+        body: "Connect or manage the Slack bot on the Integrations page.",
       },
     ],
   },
@@ -253,18 +332,17 @@ export const GUIDES = {
     id: "integrations",
     version: 2,
     title: "Integrations",
-    intro:
-      "Connect the tools where your work already lives. Atrium syncs issues into projects and keeps them up to date.",
+    intro: "Connect the tools where your work already lives.",
     tour: [
       {
         target: "integrations-providers",
         title: "Providers",
-        body: "Choose a provider to connect it with OAuth or an access token. Connected providers show their status here. Only owners and admins can connect providers.",
+        body: "Choose a provider to connect it with OAuth or an access token.",
       },
       {
         target: "integrations-mcp",
         title: "MCP for AI tools",
-        body: "Create a personal token for AI clients such as Claude or Cursor. The token is shown once, so copy it right away.",
+        body: "Create a personal token for AI clients such as Claude or Cursor.",
       },
     ],
   },
@@ -272,8 +350,7 @@ export const GUIDES = {
     id: "integration",
     version: 2,
     title: "Connection",
-    intro:
-      "This page is one provider connection. It lists the projects the provider returned and lets you link them into Atrium.",
+    intro: "One provider connection and the projects it returned.",
     tour: [
       {
         target: "connection-status",
@@ -283,12 +360,12 @@ export const GUIDES = {
       {
         target: "connection-test",
         title: "Test connection",
-        body: "Checks that the stored credentials still work. Owners and admins can run this check.",
+        body: "Checks that the stored credentials still work.",
       },
       {
         target: "connection-link",
         title: "Link a project",
-        body: "Choose a provider project to mirror into Atrium. Linking starts an initial sync right away.",
+        body: "Choose a provider project to mirror into Atrium.",
       },
     ],
   },
@@ -296,8 +373,7 @@ export const GUIDES = {
     id: "sync",
     version: 2,
     title: "Sync",
-    intro:
-      "Sync shows whether connected providers are keeping up, and what needs your attention.",
+    intro: "Whether connected providers are keeping up, and what needs attention.",
     tour: [
       {
         target: "sync-health",
@@ -307,12 +383,12 @@ export const GUIDES = {
       {
         target: "sync-conflicts",
         title: "Conflicts",
-        body: "The same field changed in Atrium and in the provider. Resolve a conflict to pick the value to keep.",
+        body: "The same field changed in Atrium and in the provider.",
       },
       {
         target: "sync-dead",
         title: "Failed jobs",
-        body: "Jobs that failed repeatedly. Owners and admins can retry them once the cause is fixed.",
+        body: "Jobs that failed repeatedly. Owners and admins can retry them.",
       },
     ],
   },
@@ -320,23 +396,22 @@ export const GUIDES = {
     id: "workspaces",
     version: 2,
     title: "Workspaces",
-    intro:
-      "A workspace keeps its projects, tasks, and people separate from other workspaces. Contexts group workspaces, such as Personal and Work.",
+    intro: "A workspace keeps its projects, tasks, and people separate.",
     tour: [
       {
         target: "workspace-contexts",
         title: "Contexts",
-        body: "Group your workspaces, such as Personal and Work. Create new contexts here, and manage the existing ones.",
+        body: "Group your workspaces, such as Personal and Work.",
       },
       {
         target: "workspace-people",
         title: "People and roles",
-        body: "Owner, admin, member, and viewer each allow a different level of access. Owners and admins can change roles and remove members.",
+        body: "Owner, admin, member, and viewer each allow a different level of access.",
       },
       {
         target: "workspace-invite",
         title: "Invite people",
-        body: "An invitation is a link, not an email. The link is shown once, so copy it right away.",
+        body: "An invitation is a link, not an email. The link is shown once.",
       },
     ],
   },
@@ -344,13 +419,12 @@ export const GUIDES = {
     id: "audit",
     version: 2,
     title: "Audit",
-    intro:
-      "The audit log records permission changes, integration changes, and other important actions in this workspace. It never stores secrets.",
+    intro: "Permission changes, integration changes, and other important actions.",
     tour: [
       {
         target: "audit-log",
         title: "Audit log",
-        body: "Recent permission changes, integration changes, and important actions, with who made them. Only owners and admins can read this log.",
+        body: "Recent important actions, with who made them.",
       },
     ],
   },
@@ -358,18 +432,17 @@ export const GUIDES = {
     id: "settings",
     version: 2,
     title: "Settings",
-    intro:
-      "Your profile, appearance, and notification choices. They apply only to your account.",
+    intro: "Your profile, appearance, and notification choices.",
     tour: [
       {
         target: "settings-appearance",
         title: "Appearance",
-        body: "Light or dark mode, the color palette, whether animations play, and how provider tiles look.",
+        body: "Light or dark mode, the color palette, animations, and provider tile styles.",
       },
       {
         target: "settings-profile",
         title: "Profile",
-        body: "Your display name and timezone. Password changes are in the form next to this one.",
+        body: "Your display name and timezone.",
       },
       {
         target: "settings-notifications",
@@ -382,8 +455,7 @@ export const GUIDES = {
     id: "search",
     version: 2,
     title: "Search",
-    intro:
-      "Search finds projects and tasks in the current workspace by name and text.",
+    intro: "Find projects and tasks in the current workspace.",
     tour: [
       {
         target: "search-input",
@@ -401,8 +473,6 @@ export const GUIDES = {
 
 export type GuideId = keyof typeof GUIDES;
 
-// Pages whose first path segment is a list screen, but whose second segment
-// is one record. Each maps to its own guide.
 const DETAIL_GUIDES: Record<string, GuideId> = {
   projects: "project",
   tasks: "task",
@@ -416,4 +486,11 @@ export function guideIdForPath(pathname: string): GuideId | null {
   if (!first) return null;
   if (second && DETAIL_GUIDES[first]) return DETAIL_GUIDES[first];
   return LIST_GUIDE_IDS.has(first) ? (first as GuideId) : null;
+}
+
+export function resolveGuide(guideId: string, version: number): ScreenGuide | null {
+  if (guideId === APP_TOUR.id && version === APP_TOUR.version) return APP_TOUR;
+  if (!Object.hasOwn(GUIDES, guideId)) return null;
+  const guide = GUIDES[guideId as GuideId];
+  return guide.version === version ? guide : null;
 }

@@ -1,36 +1,29 @@
 "use client";
 
 import { CircleHelp } from "lucide-react";
-import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { markGuideSeenAction } from "@/app/actions";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ScreenTour } from "@/components/screen-tour";
-import { GUIDES, guideIdForPath } from "@/lib/screen-guides";
+import { APP_TOUR } from "@/lib/screen-guides";
 
-// Opens the guide for the current screen the first time it is visited. The
-// guide is a short intro, then a spotlight tour of the screen. A help button
-// in the header restarts it.
+// Opens the whole-app tour once after the first successful login. Screens no
+// longer auto-open their own guides. The header help button restarts the tour.
 export function ScreenGuide({ seenVersions }: { seenVersions: Record<string, number> }) {
-  const pathname = usePathname();
-  const guideId = guideIdForPath(pathname);
-  const guide = guideId ? GUIDES[guideId] : null;
   const [seen, setSeen] = useState(seenVersions);
   const [manual, setManual] = useState<"intro" | "tour" | null>(null);
 
-  if (!guide) return null;
-
-  const unseen = seen[guide.id] !== guide.version;
+  const unseen = seen[APP_TOUR.id] !== APP_TOUR.version;
   const phase = manual ?? (unseen ? "intro" : null);
 
   const finishFlow = () => {
     setManual(null);
     if (!unseen) return;
-    setSeen((current) => ({ ...current, [guide.id]: guide.version }));
-    // If the save fails, the guide stays marked as seen for this session and
+    setSeen((current) => ({ ...current, [APP_TOUR.id]: APP_TOUR.version }));
+    // If the save fails, the tour stays marked as seen for this session and
     // shows again on the next visit.
-    markGuideSeenAction(guide.id, guide.version).catch(() => undefined);
+    markGuideSeenAction(APP_TOUR.id, APP_TOUR.version).catch(() => undefined);
   };
 
   return (
@@ -40,8 +33,8 @@ export function ScreenGuide({ seenVersions }: { seenVersions: Record<string, num
         variant="outline"
         size="icon"
         data-tour="guide-help"
-        title="Show guide for this screen"
-        aria-label="Show guide for this screen"
+        title="Show app tour"
+        aria-label="Show app tour"
         onClick={() => setManual("intro")}
       >
         <CircleHelp className="size-4" aria-hidden="true" />
@@ -54,8 +47,8 @@ export function ScreenGuide({ seenVersions }: { seenVersions: Record<string, num
       >
         <DialogContent className="w-[min(100%-2rem,32rem)]">
           <DialogHeader>
-            <DialogTitle>{guide.title}</DialogTitle>
-            <DialogDescription>{guide.intro}</DialogDescription>
+            <DialogTitle>{APP_TOUR.title}</DialogTitle>
+            <DialogDescription>{APP_TOUR.intro}</DialogDescription>
           </DialogHeader>
           <div className="mt-6 flex items-center justify-between gap-2">
             <Button type="button" variant="ghost" onClick={finishFlow}>
@@ -67,7 +60,7 @@ export function ScreenGuide({ seenVersions }: { seenVersions: Record<string, num
           </div>
         </DialogContent>
       </Dialog>
-      {phase === "tour" ? <ScreenTour steps={guide.tour} onClose={finishFlow} /> : null}
+      {phase === "tour" ? <ScreenTour steps={APP_TOUR.tour} onClose={finishFlow} /> : null}
     </>
   );
 }
