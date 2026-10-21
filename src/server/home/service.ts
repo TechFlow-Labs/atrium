@@ -2,6 +2,7 @@ import { sql } from "drizzle-orm";
 import { requireAction } from "../authz/membership";
 import { withUser } from "../db/client";
 import { textArray } from "../db/sql";
+import { areDevMocksVisible, sqlDevMockProjectVisible, sqlDevMockTaskVisible } from "../dev/mock-data";
 import { CHAT_PROVIDERS, NOTE_PROVIDERS, PROVIDERS, type ProviderId } from "../integrations/types";
 
 const STALE_MS = 15 * 60 * 1000;
@@ -23,6 +24,7 @@ export async function homeFeed(userId: string, workspaceId: string, now: number,
   const selected = parseHomeSource(source);
   const atriumOnly = selected === "atrium";
   const providerSource = selected && selected !== "atrium" ? selected : "";
+  const showMocks = await areDevMocksVisible();
 
   return withUser(userId, async (tx) => {
     await requireAction(tx, workspaceId, "task.read");
@@ -34,6 +36,8 @@ export async function homeFeed(userId: string, workspaceId: string, now: number,
       or (${atriumOnly ? "atrium" : ""} = 'atrium' and t.provider is null)
       or (${providerSource} <> '' and t.provider = ${providerSource})
     )`;
+    const mockProjectOk = sqlDevMockProjectVisible(showMocks);
+    const mockTaskOk = sqlDevMockTaskVisible(showMocks);
 
     const priorities = await tx.execute(sql`
       select t.id, t.title, t.priority, t.status, t.due_at, p.name as project_name, t.provider, t.external_url
@@ -43,6 +47,7 @@ export async function homeFeed(userId: string, workspaceId: string, now: number,
         and t.status in ('open', 'in_progress', 'blocked')
         and t.priority in ('urgent', 'high')
         and ${taskSourceMatch}
+        and ${mockProjectOk}
       order by case t.priority when 'urgent' then 0 else 1 end, t.due_at nulls last
       limit 8
     `);
@@ -55,6 +60,7 @@ export async function homeFeed(userId: string, workspaceId: string, now: number,
         and t.due_at is not null
         and t.due_at <= ${weekEnd}
         and ${taskSourceMatch}
+        and ${mockProjectOk}
       order by t.due_at
       limit 8
     `);
@@ -65,6 +71,7 @@ export async function homeFeed(userId: string, workspaceId: string, now: number,
         and t.deleted_at is null
         and t.status = 'blocked'
         and ${taskSourceMatch}
+        and ${mockProjectOk}
       order by t.updated_at desc limit 8
     `);
     const activity = await tx.execute(sql`
@@ -96,6 +103,7 @@ export async function homeFeed(userId: string, workspaceId: string, now: number,
           and t.provider is not null
           and t.provider <> all(${NON_TASK_PROVIDER_SQL})
           and not exists (select 1 from connected c where c.provider = t.provider)
+          and ${mockTaskOk}
       )
       select provider, display_name from (
         select provider, display_name, rank from connected
@@ -133,31 +141,38 @@ export async function homeFeed(userId: string, workspaceId: string, now: number,
       select
         (select count(*)::int from tasks t
           where t.workspace_id = ${workspaceId}::uuid and t.deleted_at is null and t.status = 'open'
-            and ${taskSourceMatch}) as open_count,
+            and ${taskSourceMatch}
+            and ${mockTaskOk}) as open_count,
         (select count(*)::int from tasks t
           where t.workspace_id = ${workspaceId}::uuid and t.deleted_at is null and t.status = 'in_progress'
-            and ${taskSourceMatch}) as in_progress_count,
+            and ${taskSourceMatch}
+            and ${mockTaskOk}) as in_progress_count,
         (select count(*)::int from tasks t
           where t.workspace_id = ${workspaceId}::uuid and t.deleted_at is null and t.status = 'blocked'
-            and ${taskSourceMatch}) as blocked_count,
+            and ${taskSourceMatch}
+            and ${mockTaskOk}) as blocked_count,
         (select count(*)::int from tasks t
           where t.workspace_id = ${workspaceId}::uuid and t.deleted_at is null
             and t.status in ('open', 'in_progress', 'blocked')
             and t.priority in ('urgent', 'high')
-            and ${taskSourceMatch}) as attention_count,
+            and ${taskSourceMatch}
+            and ${mockTaskOk}) as attention_count,
         (select count(*)::int from tasks t
           where t.workspace_id = ${workspaceId}::uuid and t.deleted_at is null
             and t.status not in ('done', 'cancelled')
             and t.due_at is not null
             and t.due_at <= ${weekEnd}
-            and ${taskSourceMatch}) as due_soon_count,
+            and ${taskSourceMatch}
+            and ${mockTaskOk}) as due_soon_count,
         (select count(*)::int from tasks t
           where t.workspace_id = ${workspaceId}::uuid and t.deleted_at is null
             and t.status = 'done'
             and t.updated_at >= ${weekStart}
-            and ${taskSourceMatch}) as done_week_count,
+            and ${taskSourceMatch}
+            and ${mockTaskOk}) as done_week_count,
         (select count(*)::int from projects p
           where p.workspace_id = ${workspaceId}::uuid and p.status = 'active'
+            and ${mockProjectOk}
             and (
               ${selected} = ''
               or (${atriumOnly ? "atrium" : ""} = 'atrium' and p.ownership_mode = 'native')
@@ -219,24 +234,31 @@ export async function homeFeed(userId: string, workspaceId: string, now: number,
 export async function searchWorkspace(userId: string, workspaceId: string, query: string) {
   const term = query.trim();
   if (term.length < 2) return { projects: [], tasks: [] };
+  const showMocks = await areDevMocksVisible();
   return withUser(userId, async (tx) => {
     await requireAction(tx, workspaceId, "task.read");
     const like = `%${term}%`;
     const projects = await tx.execute(sql`
-      select id, name, ownership_mode from projects
-      where workspace_id = ${workspaceId}::uuid and name ilike ${like}
-      order by name limit 8
+      select p.id, p.name, p.ownership_mode from projects p
+      where p.workspace_id = ${workspaceId}::uuid
+        and p.name ilike ${like}
+        and ${sqlDevMockProjectVisible(showMocks)}
+      order by p.name limit 8
     `);
     const tasks = await tx.execute(sql`
-      select id, title, status, provider from tasks
-      where workspace_id = ${workspaceId}::uuid and deleted_at is null and (title ilike ${like} or description ilike ${like})
-      order by updated_at desc limit 8
+      select t.id, t.title, t.status, t.provider from tasks t
+      where t.workspace_id = ${workspaceId}::uuid
+        and t.deleted_at is null
+        and (t.title ilike ${like} or t.description ilike ${like})
+        and ${sqlDevMockTaskVisible(showMocks)}
+      order by t.updated_at desc limit 8
     `);
     return { projects, tasks };
   });
 }
 
 export async function calendarTasks(userId: string, workspaceId: string, start: string, end: string) {
+  const showMocks = await areDevMocksVisible();
   return withUser(userId, async (tx) => {
     await requireAction(tx, workspaceId, "task.read");
     return tx.execute(sql`
@@ -247,6 +269,7 @@ export async function calendarTasks(userId: string, workspaceId: string, start: 
         and t.deleted_at is null
         and t.due_at >= ${new Date(start).toISOString()}
         and t.due_at < ${new Date(end).toISOString()}
+        and ${sqlDevMockProjectVisible(showMocks)}
       order by p.name, t.due_at
     `);
   });

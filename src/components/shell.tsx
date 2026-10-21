@@ -5,6 +5,7 @@ import { AccountMenu } from "@/components/account-menu";
 import { AtriumLogo } from "@/components/atrium-logo";
 import { AppSidebar } from "@/components/app-sidebar";
 import { CreateMenu } from "@/components/create-menu";
+import { DevMenu } from "@/components/dev-menu";
 import { PageMotion } from "@/components/page-motion";
 import { QuickActions } from "@/components/quick-actions";
 import { ScreenGuide } from "@/components/screen-guide";
@@ -23,6 +24,7 @@ export function Shell({
   sidebarCollapsed = false,
   sidebarOrder,
   sidebarGroups,
+  devTools = null,
   children,
 }: {
   user: SessionUser;
@@ -34,6 +36,7 @@ export function Shell({
   sidebarCollapsed?: boolean;
   sidebarOrder?: string;
   sidebarGroups?: string;
+  devTools?: { mocksVisible: boolean; envLabel: string } | null;
   children: React.ReactNode;
 }) {
   return (
@@ -70,6 +73,7 @@ export function Shell({
               <CreateMenu />
             </div>
             <HeaderAction href="/sync" label="Sync" icon={RefreshCw} className="hidden sm:inline-flex" />
+            {devTools ? <DevMenu mocksVisible={devTools.mocksVisible} envLabel={devTools.envLabel} /> : null}
             <AccountMenu user={user} theme={theme} />
           </div>
           <nav className="flex w-full gap-3 overflow-x-auto text-sm md:hidden">

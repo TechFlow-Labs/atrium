@@ -9,6 +9,12 @@ import { workspaceContext } from "@/server/auth/workspace";
 import { ensurePersonalWorkspace, listWorkspaceContexts } from "@/server/workspaces/service";
 import { getSeenGuideVersions } from "@/server/guides/service";
 import { getOnboardingPending } from "@/server/onboarding/service";
+import {
+  areDevMocksVisible,
+  ensureDevMockDataForAccount,
+  isLocalDev,
+  localDevLabel,
+} from "@/server/dev/mock-data";
 
 export const instant = false;
 
@@ -31,9 +37,14 @@ async function Frame({ children }: { children: React.ReactNode }) {
     listWorkspaceContexts(user.id),
     getSeenGuideVersions(user.id),
   ]);
+  const localDev = isLocalDev();
+  if (localDev) {
+    await ensureDevMockDataForAccount(user.id, workspaces);
+  }
   const cookieStore = await cookies();
   const theme = cookieStore.get("atrium_theme")?.value === "dark" ? "dark" : "light";
   const sidebarCollapsed = cookieStore.get("atrium_sidebar")?.value === "collapsed";
+  const mocksVisible = localDev ? await areDevMocksVisible() : true;
   return (
     <Shell
       user={user}
@@ -45,6 +56,7 @@ async function Frame({ children }: { children: React.ReactNode }) {
       sidebarCollapsed={sidebarCollapsed}
       sidebarOrder={cookieStore.get("atrium_sidebar_order")?.value}
       sidebarGroups={cookieStore.get("atrium_sidebar_groups")?.value}
+      devTools={localDev ? { mocksVisible, envLabel: localDevLabel() } : null}
     >
       {children}
     </Shell>

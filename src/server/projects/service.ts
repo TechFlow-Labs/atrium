@@ -2,6 +2,7 @@ import { sql } from "drizzle-orm";
 import { writeAudit } from "../audit";
 import { requireAction } from "../authz/membership";
 import { withUser } from "../db/client";
+import { areDevMocksVisible, sqlDevMockProjectVisible } from "../dev/mock-data";
 
 export type ProjectRecord = {
   id: string;
@@ -33,6 +34,7 @@ export async function listProjects(
   workspaceId: string,
   filter: { status?: "active" | "archived" | "all"; query?: string } = {},
 ): Promise<ProjectRecord[]> {
+  const showMocks = await areDevMocksVisible();
   return withUser(userId, async (tx) => {
     await requireAction(tx, workspaceId, "task.read");
     const status = filter.status ?? "active";
@@ -52,6 +54,7 @@ export async function listProjects(
           or p.name ilike ${"%" + query + "%"}
           or coalesce(p.nickname, '') ilike ${"%" + query + "%"}
         )
+        and ${sqlDevMockProjectVisible(showMocks)}
       order by coalesce(nullif(btrim(p.nickname), ''), p.name)
     `);
   });
@@ -98,6 +101,7 @@ export async function getProjectsAnalytics(
   const status = filter.status ?? "active";
   const weekEnd = new Date(nowMs + 7 * 24 * 60 * 60 * 1000).toISOString();
   const weekStart = new Date(nowMs - 7 * 24 * 60 * 60 * 1000).toISOString();
+  const showMocks = await areDevMocksVisible();
 
   return withUser(userId, async (tx) => {
     await requireAction(tx, workspaceId, "task.read");
@@ -119,6 +123,7 @@ export async function getProjectsAnalytics(
         count(*)::int as total
       from projects p
       where p.workspace_id = ${workspaceId}::uuid
+        and ${sqlDevMockProjectVisible(showMocks)}
     `);
 
     const taskRows = await tx.execute<{
@@ -157,6 +162,7 @@ export async function getProjectsAnalytics(
       where t.workspace_id = ${workspaceId}::uuid
         and t.deleted_at is null
         and (${status} = 'all' or p.status = ${status})
+        and ${sqlDevMockProjectVisible(showMocks)}
     `);
 
     const busiest = await tx.execute<{
@@ -187,6 +193,7 @@ export async function getProjectsAnalytics(
       left join tasks t on t.project_id = p.id and t.workspace_id = p.workspace_id
       where p.workspace_id = ${workspaceId}::uuid
         and (${status} = 'all' or p.status = ${status})
+        and ${sqlDevMockProjectVisible(showMocks)}
       group by p.id, p.name, p.nickname, p.ownership_mode
       having count(*) filter (
         where t.deleted_at is null

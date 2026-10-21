@@ -52,6 +52,13 @@ import { parseProjectsLayout, type ProjectsLayout } from "@/lib/projects-layout"
 import { parseColorPalette, parseThemeMode } from "@/lib/theme";
 import { createMcpToken, revokeMcpToken } from "@/server/mcp/tokens";
 import { createWorkspaceNote } from "@/server/notes/workspace-notes";
+import {
+  DEV_MOCKS_COOKIE,
+  ensureDevMockData,
+  isLocalDev,
+  parseDevMocksVisible,
+  reseedDevMockData,
+} from "@/server/dev/mock-data";
 
 export type ActionState = { error?: string; notice?: string; token?: string; version?: number; noteId?: string };
 
@@ -853,4 +860,25 @@ export async function projectsLayoutAction(layout: ProjectsLayout): Promise<void
     `);
   });
   revalidatePath("/projects");
+}
+
+export async function setDevMocksVisibleAction(formData: FormData): Promise<void> {
+  if (!isLocalDev()) throw new Error("Dev tools are only available on localhost");
+  const user = await userId();
+  const visible = parseDevMocksVisible(String(formData.get("visible") ?? "1"));
+  (await cookies()).set(DEV_MOCKS_COOKIE, visible ? "1" : "0", { path: "/", sameSite: "lax" });
+  if (visible) {
+    const { current } = await workspaceContext(user);
+    await ensureDevMockData(user, current.id);
+  }
+  revalidatePath("/", "layout");
+}
+
+export async function reseedDevMocksAction(): Promise<void> {
+  if (!isLocalDev()) throw new Error("Dev tools are only available on localhost");
+  const user = await userId();
+  (await cookies()).set(DEV_MOCKS_COOKIE, "1", { path: "/", sameSite: "lax" });
+  const { current } = await workspaceContext(user);
+  await reseedDevMockData(user, current.id);
+  revalidatePath("/", "layout");
 }

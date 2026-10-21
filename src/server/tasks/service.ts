@@ -4,6 +4,7 @@ import { writeAudit } from "../audit";
 import { requireAction } from "../authz/membership";
 import { withUser, type Tx } from "../db/client";
 import { textArray } from "../db/sql";
+import { areDevMocksVisible, sqlDevMockProjectVisible } from "../dev/mock-data";
 import { getAdapter } from "../integrations/registry";
 import type { ProviderId, TaskPriority, TaskStatus } from "../integrations/types";
 import type { CanonicalField } from "../sync/fingerprint";
@@ -214,6 +215,7 @@ export async function listTasks(
     dueAfter?: string;
   } = {},
 ): Promise<TaskRecord[]> {
+  const showMocks = await areDevMocksVisible();
   return withUser(userId, async (tx) => {
     await requireAction(tx, workspaceId, "task.read");
     const query = filter.query?.trim() ?? "";
@@ -275,6 +277,7 @@ export async function listTasks(
             )
           )
         )
+        and ${sqlDevMockProjectVisible(showMocks)}
       order by
         case t.priority when 'urgent' then 0 when 'high' then 1 when 'medium' then 2 when 'low' then 3 else 4 end,
         t.due_at nulls last,
