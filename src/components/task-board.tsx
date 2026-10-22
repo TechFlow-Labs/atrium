@@ -423,11 +423,11 @@ export function TaskBoard({
               key={column}
               data-board-column={column}
               className={cn(
-                "board-column flex min-h-full min-w-64 flex-1 flex-col rounded-lg border bg-card p-3 transition-[background-color,border-color,box-shadow] duration-200",
+                "board-column flex min-h-0 min-w-64 flex-1 flex-col overflow-hidden rounded-lg border bg-card p-3 transition-[background-color,border-color,box-shadow] duration-200",
                 isOver && "border-foreground/30 bg-accent/40 shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--foreground)_12%,transparent)]",
               )}
             >
-              <h2 className="flex items-center gap-1.5 text-sm font-medium capitalize">
+              <h2 className="flex shrink-0 items-center gap-1.5 text-sm font-medium capitalize">
                 <StatusIcon status={column} className="size-3.5" />
                 {column.replace("_", " ")}
                 <span className="ml-auto text-xs font-normal text-muted">{columnTasks.length}</span>
@@ -435,13 +435,13 @@ export function TaskBoard({
               <div
                 data-column-list={column}
                 className={cn(
-                  "mt-3 flex min-h-24 flex-1 flex-col rounded-md transition-colors duration-200",
+                  "mt-3 flex min-h-0 flex-1 flex-col overflow-y-auto rounded-md transition-colors duration-200",
                   isOver && "bg-accent/30",
                 )}
               >
                 {insertAt === 0 ? <DropInsertBar /> : null}
                 {visualCount === 0 && !isOver ? (
-                  <div className="flex h-20 items-center justify-center rounded-md border border-dashed border-border/80 text-xs text-muted">
+                  <div className="flex h-20 shrink-0 items-center justify-center rounded-md border border-dashed border-border/80 text-xs text-muted">
                     No tasks
                   </div>
                 ) : null}
@@ -463,7 +463,7 @@ export function TaskBoard({
                         onPointerDown={(event) => onCardPointerDown(event, task)}
                         onDragStart={(event) => event.preventDefault()}
                         className={cn(
-                          "board-card group relative my-1 overflow-hidden rounded-md border bg-background text-sm",
+                          "board-card group relative my-1 shrink-0 overflow-hidden rounded-md border bg-background text-sm",
                           "transition-[opacity,transform,box-shadow,background-color] duration-200 ease-out",
                           isSaving
                             ? "cursor-wait"
