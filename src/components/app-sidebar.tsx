@@ -32,6 +32,7 @@ import {
   Settings,
   type LucideIcon,
 } from "lucide-react";
+import { AtriumLogo, AtriumMark } from "@/components/atrium-logo";
 import { cn } from "@/lib/utils";
 
 type NavLink = { label: string; href: string; icon: LucideIcon; group: string | null };
@@ -440,13 +441,13 @@ export function AppSidebar({
       >
         <div className={cn("flex items-center gap-2", collapsed ? "justify-center" : "justify-between px-2")}>
           {!collapsed ? (
-            <Link href="/home" className="serif text-2xl">
-              Atrium
+            <Link href="/home" aria-label="Atrium" className="min-w-0 text-sidebar-foreground">
+              <AtriumLogo markClassName="size-7 text-emerald-200" />
             </Link>
           ) : (
             <SidebarTip label="Atrium" show>
-              <Link href="/home" className="serif text-base leading-none" aria-label="Atrium">
-                A
+              <Link href="/home" aria-label="Atrium" className="text-emerald-200">
+                <AtriumMark className="size-6" />
               </Link>
             </SidebarTip>
           )}

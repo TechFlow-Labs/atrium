@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Suspense } from "react";
 import { RefreshCw, Search } from "lucide-react";
 import { AccountMenu } from "@/components/account-menu";
+import { AtriumLogo } from "@/components/atrium-logo";
 import { AppSidebar } from "@/components/app-sidebar";
 import { CreateMenu } from "@/components/create-menu";
 import { PageMotion } from "@/components/page-motion";
@@ -45,7 +46,9 @@ export function Shell({
       <div className="shell-chrome-in relative z-0 flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         <header className="relative z-20 flex shrink-0 flex-wrap items-center gap-3 border-b bg-background/90 px-4 py-3 backdrop-blur md:px-6">
           <div className="flex shrink-0 items-center gap-3">
-            <Link href="/home" className="serif text-xl md:hidden">Atrium</Link>
+            <Link href="/home" aria-label="Atrium" className="text-foreground md:hidden">
+              <AtriumLogo markClassName="size-6 text-primary" wordClassName="text-xl" />
+            </Link>
             <div className="flex items-center" data-tour="workspace-switch">
               <WorkspaceSwitch currentId={current.id} workspaces={workspaces} contexts={contexts} />
             </div>

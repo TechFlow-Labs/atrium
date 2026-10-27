@@ -7,6 +7,7 @@ import {
   onboardingProfileAction,
   onboardingWorkspaceAction,
 } from "@/app/actions";
+import { AtriumLogo } from "@/components/atrium-logo";
 import { IntegrationsOnboarding } from "@/components/integrations-onboarding";
 import { McpPanel } from "@/components/mcp-panel";
 import { ThemeSettings } from "@/components/theme-settings";
@@ -54,7 +55,7 @@ export function OnboardingWizard(props: Props) {
     <div className="h-dvh overflow-y-auto bg-background">
       <div className="mx-auto flex min-h-full w-full max-w-3xl flex-col px-4 py-8 md:px-6">
         <header className="flex items-center justify-between gap-3">
-          <span className="serif text-2xl">Atrium</span>
+          <AtriumLogo markClassName="size-7 text-primary" />
           <div className="flex items-center gap-3">
             <p className="text-xs uppercase tracking-[0.18em] text-muted">
               Step {index + 1} of {STEPS.length}

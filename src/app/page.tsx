@@ -1,6 +1,7 @@
 import type { CSSProperties } from "react";
 import Link from "next/link";
 import { Suspense } from "react";
+import { AtriumLogo } from "@/components/atrium-logo";
 import { PageMotion } from "@/components/page-motion";
 
 export default function Page() {
@@ -27,9 +28,10 @@ export default function Page() {
 function LandingCopy() {
   return (
     <>
-      <p className="text-xs uppercase tracking-[0.22em] text-muted" data-reveal>
-        Self-hosted operations
-      </p>
+      <div data-reveal>
+        <AtriumLogo markClassName="size-9 text-primary" />
+        <p className="mt-3 text-xs uppercase tracking-[0.22em] text-muted">Self-hosted operations</p>
+      </div>
       <h1 className="mt-3 text-5xl leading-tight" data-reveal style={{ "--reveal-delay": "60ms" } as CSSProperties}>
         One desk for personal work and the company backlog.
       </h1>

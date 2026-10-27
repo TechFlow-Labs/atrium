@@ -1,5 +1,6 @@
 import type { CSSProperties, ReactNode } from "react";
 import { Suspense } from "react";
+import { AtriumLogo } from "@/components/atrium-logo";
 import { PageMotion } from "@/components/page-motion";
 
 export function AuthShell({
@@ -44,7 +45,7 @@ export function AuthShell({
 function AuthCopy({ title, description }: { title: string; description: string }) {
   return (
     <>
-      <p className="text-xs uppercase tracking-[0.22em] text-muted">Atrium</p>
+      <AtriumLogo markClassName="size-8 text-primary" />
       <h1 className="mt-3 text-4xl leading-tight md:text-5xl">{title}</h1>
       <p className="mt-3 text-base text-muted md:text-lg">{description}</p>
     </>
