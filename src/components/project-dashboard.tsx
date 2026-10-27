@@ -1,9 +1,9 @@
 import Link from "next/link";
-import { ArrowRight } from "lucide-react";
+import { ArrowRight, type LucideIcon } from "lucide-react";
 import { PriorityIcon, StatusIcon } from "@/components/task-meta-icons";
 import { ProviderIcon } from "@/components/provider-icon";
 import { Badge } from "@/components/ui/badge";
-import { formatWhen } from "@/lib/utils";
+import { cn, formatWhen } from "@/lib/utils";
 
 export type DashboardTask = {
   id: string;
@@ -81,12 +81,16 @@ export function ProjectStatCard({
   label,
   value,
   hint,
+  icon: Icon,
+  iconClassName,
   inert = false,
 }: {
   href: string;
   label: string;
   value: number | string;
   hint: string;
+  icon?: LucideIcon;
+  iconClassName?: string;
   /** When true, render as a static tile (e.g. customize mode). */
   inert?: boolean;
 }) {
@@ -94,7 +98,15 @@ export function ProjectStatCard({
     "group flex h-full min-h-[7.5rem] flex-col rounded-lg border bg-card p-4 transition hover:border-foreground/20 hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
   const body = (
     <>
-      <p className="text-xs uppercase tracking-[0.14em] text-muted">{label}</p>
+      <div className="flex items-start justify-between gap-3">
+        <p className="text-xs uppercase tracking-[0.14em] text-muted">{label}</p>
+        {Icon ? (
+          <Icon
+            className={cn("size-4 shrink-0 text-muted transition group-hover:text-foreground", iconClassName)}
+            aria-hidden="true"
+          />
+        ) : null}
+      </div>
       <p className="mt-2 text-3xl font-medium tabular-nums">{value}</p>
       <p className="mt-auto pt-1 flex items-center gap-1 text-xs text-muted transition group-hover:text-foreground">
         {hint}

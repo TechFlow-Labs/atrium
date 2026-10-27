@@ -10,7 +10,22 @@ import {
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
 } from "react";
-import { Eye, EyeOff, GripVertical, LayoutDashboard, RotateCcw } from "lucide-react";
+import {
+  AlertTriangle,
+  Archive,
+  CheckCircle2,
+  CircleDot,
+  Cloud,
+  Eye,
+  EyeOff,
+  FolderKanban,
+  GripVertical,
+  House,
+  LayoutDashboard,
+  RotateCcw,
+  Siren,
+  type LucideIcon,
+} from "lucide-react";
 import { projectsLayoutAction, type ActionState } from "@/app/actions";
 import { ProjectCard } from "@/components/project-card";
 import {
@@ -65,6 +80,19 @@ type StatValue = {
   href: string;
   value: number;
   hint: string;
+  icon: LucideIcon;
+  iconClassName: string;
+};
+
+const PROJECT_STAT_ICONS: Record<ProjectStatId, { icon: LucideIcon; className: string }> = {
+  active: { icon: FolderKanban, className: "text-sky-500" },
+  archived: { icon: Archive, className: "text-stone-400" },
+  native: { icon: House, className: "text-emerald-500" },
+  external: { icon: Cloud, className: "text-violet-500" },
+  attention: { icon: Siren, className: "text-rose-600" },
+  inProgress: { icon: CircleDot, className: "text-amber-500" },
+  blocked: { icon: AlertTriangle, className: "text-rose-500" },
+  doneWeek: { icon: CheckCircle2, className: "text-emerald-500" },
 };
 
 type LayoutKind = "section" | "stat" | "insight";
@@ -233,18 +261,62 @@ export function ProjectsBoard({
   const frameRef = useRef(0);
 
   const statsCatalog: Record<ProjectStatId, StatValue> = {
-    active: { href: "/projects", value: portfolio.active, hint: "Currently in the workspace" },
-    archived: { href: "/projects?status=archived", value: portfolio.archived, hint: "Parked or completed projects" },
-    native: { href: "/projects?status=all", value: portfolio.native, hint: "Canonical in Atrium" },
+    active: {
+      href: "/projects",
+      value: portfolio.active,
+      hint: "Currently in the workspace",
+      icon: PROJECT_STAT_ICONS.active.icon,
+      iconClassName: PROJECT_STAT_ICONS.active.className,
+    },
+    archived: {
+      href: "/projects?status=archived",
+      value: portfolio.archived,
+      hint: "Parked or completed projects",
+      icon: PROJECT_STAT_ICONS.archived.icon,
+      iconClassName: PROJECT_STAT_ICONS.archived.className,
+    },
+    native: {
+      href: "/projects?status=all",
+      value: portfolio.native,
+      hint: "Canonical in Atrium",
+      icon: PROJECT_STAT_ICONS.native.icon,
+      iconClassName: PROJECT_STAT_ICONS.native.className,
+    },
     external: {
       href: "/projects?status=all",
       value: portfolio.external + portfolio.hybrid,
       hint: "Mirrored from a provider",
+      icon: PROJECT_STAT_ICONS.external.icon,
+      iconClassName: PROJECT_STAT_ICONS.external.className,
     },
-    attention: { href: "/tasks?priority=attention", value: taskStats.attention, hint: `Across ${scopeLabel}` },
-    inProgress: { href: "/tasks?status=in_progress", value: taskStats.inProgress, hint: "Actively being worked" },
-    blocked: { href: "/tasks?status=blocked", value: taskStats.blocked, hint: "Waiting on a dependency" },
-    doneWeek: { href: "/tasks?status=done", value: taskStats.doneWeek, hint: "Closed in the last seven days" },
+    attention: {
+      href: "/tasks?priority=attention",
+      value: taskStats.attention,
+      hint: `Across ${scopeLabel}`,
+      icon: PROJECT_STAT_ICONS.attention.icon,
+      iconClassName: PROJECT_STAT_ICONS.attention.className,
+    },
+    inProgress: {
+      href: "/tasks?status=in_progress",
+      value: taskStats.inProgress,
+      hint: "Actively being worked",
+      icon: PROJECT_STAT_ICONS.inProgress.icon,
+      iconClassName: PROJECT_STAT_ICONS.inProgress.className,
+    },
+    blocked: {
+      href: "/tasks?status=blocked",
+      value: taskStats.blocked,
+      hint: "Waiting on a dependency",
+      icon: PROJECT_STAT_ICONS.blocked.icon,
+      iconClassName: PROJECT_STAT_ICONS.blocked.className,
+    },
+    doneWeek: {
+      href: "/tasks?status=done",
+      value: taskStats.doneWeek,
+      hint: "Closed in the last seven days",
+      icon: PROJECT_STAT_ICONS.doneWeek.icon,
+      iconClassName: PROJECT_STAT_ICONS.doneWeek.className,
+    },
   };
 
   function placePreview() {
@@ -560,6 +632,8 @@ export function ProjectsBoard({
                         label={PROJECT_STAT_LABELS[stat.id]}
                         value={meta.value}
                         hint={meta.hint}
+                        icon={meta.icon}
+                        iconClassName={meta.iconClassName}
                         inert={editing}
                       />
                     );

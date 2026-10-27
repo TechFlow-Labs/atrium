@@ -1,5 +1,15 @@
 import { Suspense } from "react";
 import Link from "next/link";
+import {
+  AlertTriangle,
+  CalendarClock,
+  CheckCircle2,
+  Circle,
+  CircleDot,
+  Gauge,
+  ListTodo,
+  Siren,
+} from "lucide-react";
 import { ScreenLoader } from "@/components/screen-loader";
 import { connection } from "next/server";
 import { notFound, redirect } from "next/navigation";
@@ -126,48 +136,64 @@ async function ProjectContent({ params }: { params: Promise<{ projectId: string 
           label="Needs attention"
           value={stats.attention}
           hint="Urgent and high priority"
+          icon={Siren}
+          iconClassName="text-rose-600"
         />
         <ProjectStatCard
           href={`/tasks?project=${projectFilter}&status=in_progress`}
           label="In progress"
           value={stats.inProgress}
           hint="Actively being worked"
+          icon={CircleDot}
+          iconClassName="text-amber-500"
         />
         <ProjectStatCard
           href={`/tasks?project=${projectFilter}&status=blocked`}
           label="Blocked"
           value={stats.blocked}
           hint="Waiting on a dependency"
+          icon={AlertTriangle}
+          iconClassName="text-rose-500"
         />
         <ProjectStatCard
           href={`/tasks?project=${projectFilter}&status=done`}
           label="Done this week"
           value={stats.doneWeek}
           hint="Closed in the last seven days"
+          icon={CheckCircle2}
+          iconClassName="text-emerald-500"
         />
         <ProjectStatCard
           href={`/tasks?project=${projectFilter}&status=open`}
           label="Open"
           value={stats.open}
           hint="Not started yet"
+          icon={Circle}
+          iconClassName="text-sky-500"
         />
         <ProjectStatCard
           href={`/tasks?project=${projectFilter}`}
           label="Due soon"
           value={stats.dueSoon}
           hint="Deadlines in the next seven days"
+          icon={CalendarClock}
+          iconClassName="text-amber-500"
         />
         <ProjectStatCard
           href={`/tasks?project=${projectFilter}`}
           label="All tasks"
           value={stats.total}
           hint="Everything in this project"
+          icon={ListTodo}
+          iconClassName="text-stone-400"
         />
         <ProjectStatCard
           href={`/tasks?project=${projectFilter}&status=done`}
           label="Completion"
           value={`${stats.completion}%`}
           hint={`${stats.done} of ${stats.open + stats.inProgress + stats.blocked + stats.done} active`}
+          icon={Gauge}
+          iconClassName="text-emerald-500"
         />
       </section>
 
