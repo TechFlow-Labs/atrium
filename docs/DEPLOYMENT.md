@@ -105,3 +105,48 @@ Compose starts `migrate` before `app`, and `worker` after `app` is healthy. Post
 1. Create the stack with the required variables above.
 2. Confirm `https://<ATRIUM_HOST>/api/health` returns `{"ok":true}`.
 3. Sign up the first account in the browser. Do not seed.
+
+## Deploy on push to main
+
+GitLab CI deploys this repo when `main` is pushed. Ansible and GoCD are not involved. The pipeline file is `.gitlab-ci.yml`. The job runs `deploy/compose-up.sh`, which builds and starts Compose, then waits until the app health check passes.
+
+The job is tagged `docker-deploy`. It only runs on a shell runner installed on the VPS, so the runner and the containers share Docker. A GitLab.com shared runner cannot reach the host Docker socket and will not pick up this job. The script pins the Compose project name to `atrium`, so the database volume stays `atrium_atrium-data` across checkouts. `COMPOSE_PROJECT_NAME` overrides that.
+
+### One-time runner setup
+
+On the VPS, after Docker is installed:
+
+1. Install `gitlab-runner` and add that user to the `docker` group.
+2. In the Atrium GitLab project, open Settings → CI/CD → Runners and create a runner tagged `docker-deploy`.
+3. Register it on the VPS:
+
+```bash
+sudo gitlab-runner register \
+  --non-interactive \
+  --url https://gitlab.com \
+  --token YOUR_GLRT_TOKEN \
+  --executor shell \
+  --description atrium-production
+```
+
+4. Write the production env file once, outside the git checkout. Use the required variables from the table above. Do not copy `.env.example`; that file is for local `pnpm dev` and does not contain the Compose variables.
+
+```bash
+sudo install -d -m 755 /opt/atrium
+sudo tee /opt/atrium/.env >/dev/null <<'EOF'
+POSTGRES_PASSWORD=
+APP_PASSWORD=
+WORKER_PASSWORD=
+MIGRATE_PASSWORD=
+BETTER_AUTH_SECRET=
+BETTER_AUTH_URL=https://atrium.example.com
+CREDENTIAL_ENCRYPTION_KEY=
+ATRIUM_HOST=atrium.example.com
+EOF
+sudo chown root:gitlab-runner /opt/atrium/.env
+sudo chmod 640 /opt/atrium/.env
+```
+
+Fill every value before the first deploy. `ATRIUM_ENV_FILE` overrides that path. The checkout used by the job is GitLab's build directory, not `/opt/atrium`. The named volume `atrium-data` keeps Postgres across deploys.
+
+A push to `main` then runs the job. Do not seed the production database.

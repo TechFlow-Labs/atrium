@@ -1,0 +1,20 @@
+# Push to main deploys the Compose stack on the VPS.
+# The job runs only on a shell runner tagged docker-deploy, installed on that host.
+# It does not install Docker or Traefik. Those stay a one-time host setup.
+# See docs/DEPLOYMENT.md.
+
+stages:
+  - deploy
+
+deploy_production:
+  stage: deploy
+  tags:
+    - docker-deploy
+  resource_group: production
+  interruptible: false
+  environment:
+    name: production
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+  script:
+    - ./deploy/compose-up.sh
