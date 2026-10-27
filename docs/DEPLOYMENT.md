@@ -50,7 +50,7 @@ The role passwords must not contain single quotes. `docker/postgres/init.sh` run
 | `SMTP_PASSWORD` | blank | Mailbox password. Set it in the server environment. Do not commit it. |
 | `SMTP_FROM` | blank | From header. Production: `Atrium <support@techflowlabs.gr>`. |
 
-Password reset stays disabled in production until `SMTP_HOST`, `SMTP_USER`, `SMTP_PASSWORD`, and `SMTP_FROM` are all set. Copy the password from the existing Dify, Docmost, or LiteLLM env on the same host. Those apps already send as `support@techflowlabs.gr` through `linux230.papaki.gr`. Restart the app container after changing them.
+Password reset stays disabled in production until `SMTP_HOST`, `SMTP_USER`, `SMTP_PASSWORD`, and `SMTP_FROM` are all set. Copy the password from the existing Dify, Docmost, or LiteLLM env on the same host. Those apps already send as `support@techflowlabs.gr` through `linux230.papaki.gr`. Compose passes the six `SMTP_*` variables into both the app and the worker. The app sends the reset email. Put the values in `/opt/atrium/.env` before the deploy that introduces this change, so the new containers receive them on first start.
 
 There are two ways to set the OAuth client ID and secret:
 

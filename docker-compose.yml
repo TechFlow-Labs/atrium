@@ -90,6 +90,12 @@ services:
       DATABASE_URL_WORKER: postgres://atrium_worker:${WORKER_PASSWORD}@postgres:5432/atrium
       CREDENTIAL_ENCRYPTION_KEY: ${CREDENTIAL_ENCRYPTION_KEY:?set CREDENTIAL_ENCRYPTION_KEY}
       ALLOW_FAKE_PROVIDER: ${ALLOW_FAKE_PROVIDER:-false}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-465}
+      SMTP_SECURE: ${SMTP_SECURE:-}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM: ${SMTP_FROM:-}
       NODE_ENV: production
 
 volumes:
