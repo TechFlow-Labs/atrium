@@ -1,8 +1,11 @@
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { nextCookies } from "better-auth/next-js";
-import { getDb } from "../db/client";
+import { writeAudit } from "../audit";
+import { getDb, withUser } from "../db/client";
 import { account, session, user, verification } from "../db/schema";
+import { logError } from "../log";
+import { sendPasswordResetEmail } from "./mail";
 
 // The instance is created on first use. Importing this module must not open a
 // database connection or read the environment, because `next build` imports
@@ -19,6 +22,27 @@ function createAuth() {
       enabled: true,
       minPasswordLength: 12,
       autoSignIn: true,
+      resetPasswordTokenExpiresIn: 60 * 60,
+      revokeSessionsOnPasswordReset: true,
+      sendResetPassword: async ({ user: accountUser, url }) => {
+        await sendPasswordResetEmail(accountUser.email, url);
+      },
+      onPasswordReset: async ({ user: accountUser }) => {
+        try {
+          await withUser(accountUser.id, (tx) =>
+            writeAudit(tx, {
+              workspaceId: null,
+              action: "auth.password_reset",
+              entityType: "user",
+              entityId: accountUser.id,
+            }),
+          );
+        } catch (error) {
+          logError("password reset audit failed", {
+            error: error instanceof Error ? error.message : "audit failed",
+          });
+        }
+      },
     },
     session: {
       expiresIn: 60 * 60 * 24 * 14,

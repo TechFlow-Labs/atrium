@@ -43,6 +43,14 @@ The role passwords must not contain single quotes. `docker/postgres/init.sh` run
 | `GITEA_CLIENT_ID`, `GITEA_CLIENT_SECRET` | blank | Enables OAuth for Gitea. |
 | `GITEA_SITE_URL` | `https://gitea.com` | Set for a self-hosted Gitea. |
 | `ALLOW_FAKE_PROVIDER` | `false` | Keep `false` in production. |
+| `SMTP_HOST` | blank | Mail host for password reset. Production: `linux230.papaki.gr`. |
+| `SMTP_PORT` | `465` | `465` is implicit TLS. Use `587` only with `SMTP_SECURE=false` (STARTTLS). |
+| `SMTP_SECURE` | on for port 465 | Set `true` for implicit TLS. |
+| `SMTP_USER` | blank | Mailbox username. Production: `support@techflowlabs.gr`. |
+| `SMTP_PASSWORD` | blank | Mailbox password. Set it in the server environment. Do not commit it. |
+| `SMTP_FROM` | blank | From header. Production: `Atrium <support@techflowlabs.gr>`. |
+
+Password reset stays disabled in production until `SMTP_HOST`, `SMTP_USER`, `SMTP_PASSWORD`, and `SMTP_FROM` are all set. Copy the password from the existing Dify, Docmost, or LiteLLM env on the same host. Those apps already send as `support@techflowlabs.gr` through `linux230.papaki.gr`. Restart the app container after changing them.
 
 There are two ways to set the OAuth client ID and secret:
 

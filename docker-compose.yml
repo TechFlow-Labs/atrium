@@ -57,6 +57,12 @@ services:
       GITEA_CLIENT_ID: ${GITEA_CLIENT_ID:-}
       GITEA_CLIENT_SECRET: ${GITEA_CLIENT_SECRET:-}
       GITEA_SITE_URL: ${GITEA_SITE_URL:-https://gitea.com}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-465}
+      SMTP_SECURE: ${SMTP_SECURE:-}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM: ${SMTP_FROM:-}
       NODE_ENV: production
     ports:
       - "38471:38471"

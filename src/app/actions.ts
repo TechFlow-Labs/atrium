@@ -6,6 +6,8 @@ import { cookies } from "next/headers";
 import { redirect, unstable_rethrow } from "next/navigation";
 import { z } from "zod";
 import { getAuth } from "@/server/auth/auth";
+import { readSmtpConfig } from "@/server/auth/mail";
+import { logError } from "@/server/log";
 import { getSessionUser } from "@/server/auth/session";
 import { allowRequest } from "@/server/rate-limit";
 import {
@@ -117,6 +119,50 @@ export async function loginAction(_state: ActionState, formData: FormData): Prom
     await withUser(user.id, (tx) => writeAudit(tx, { workspaceId: null, action: "auth.signed_in", entityType: "user", entityId: user.id }));
   }
   redirect("/home");
+}
+
+const resetNotice = "If an account exists for that email, a reset link is on its way. It expires in one hour.";
+
+export async function requestPasswordResetAction(_state: ActionState, formData: FormData): Promise<ActionState> {
+  const email = String(formData.get("email") ?? "").trim();
+  if (!z.string().email().safeParse(email).success) return { error: "Enter a valid email" };
+  if (!(await allowRequest(`reset:${await clientKey()}`, 5, 15 * 60 * 1000))) {
+    return { error: "Too many attempts. Wait a few minutes and try again." };
+  }
+  if (!readSmtpConfig() && process.env.NODE_ENV === "production") {
+    return { error: "Password reset email is not set up on this server." };
+  }
+  try {
+    await getAuth().api.requestPasswordReset({
+      body: { email, redirectTo: "/reset-password" },
+      headers: await headers(),
+    });
+  } catch (error) {
+    logError("password reset request failed", { error: error instanceof Error ? error.message : "request failed" });
+  }
+  return { notice: resetNotice };
+}
+
+export async function resetPasswordAction(_state: ActionState, formData: FormData): Promise<ActionState> {
+  const token = String(formData.get("token") ?? "");
+  const next = String(formData.get("password") ?? "");
+  const confirm = String(formData.get("confirm") ?? "");
+  const parsed = password.safeParse(next);
+  if (!token) return { error: "This reset link is invalid. Request a new one." };
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Check the password" };
+  if (next !== confirm) return { error: "The passwords do not match" };
+  if (!(await allowRequest(`reset-finish:${await clientKey()}`, 10, 15 * 60 * 1000))) {
+    return { error: "Too many attempts. Wait a few minutes and try again." };
+  }
+  try {
+    await getAuth().api.resetPassword({
+      body: { newPassword: next, token },
+      headers: await headers(),
+    });
+  } catch {
+    return { error: "This reset link is invalid or has expired. Request a new one." };
+  }
+  redirect("/login?reset=1");
 }
 
 export async function logoutAction(): Promise<void> {
