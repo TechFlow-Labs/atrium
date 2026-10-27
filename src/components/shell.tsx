@@ -6,6 +6,7 @@ import { AtriumLogo } from "@/components/atrium-logo";
 import { AppSidebar } from "@/components/app-sidebar";
 import { CreateMenu } from "@/components/create-menu";
 import { PageMotion } from "@/components/page-motion";
+import { QuickActions } from "@/components/quick-actions";
 import { ScreenGuide } from "@/components/screen-guide";
 import { WorkspaceSwitch } from "@/components/workspace-switch";
 import type { WorkspaceContextDef } from "@/lib/workspace-contexts";
@@ -90,6 +91,7 @@ export function Shell({
           </Suspense>
         </main>
       </div>
+      <QuickActions />
     </div>
   );
 }

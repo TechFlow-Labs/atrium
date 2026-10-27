@@ -13,6 +13,7 @@ import { cn, formatWhen } from "@/lib/utils";
 import { getSessionUser } from "@/server/auth/session";
 import { workspaceContext } from "@/server/auth/workspace";
 import { browseObsidianNotes } from "@/server/notes/service";
+import { listWorkspaceNotes } from "@/server/notes/workspace-notes";
 
 export const instant = false;
 
@@ -21,6 +22,7 @@ type NotesSearchParams = {
   folder?: string;
   path?: string;
   integration?: string;
+  note?: string;
 };
 
 export default function NotesPage({
@@ -46,12 +48,20 @@ async function NotesContent({
   const params = await searchParams;
   const { current } = await workspaceContext(user.id);
   const canAdmin = current.role === "owner" || current.role === "admin";
-  const feed = await browseObsidianNotes(user.id, current.id, {
-    query: params.q,
-    folder: params.folder,
-    path: params.path,
-    integrationId: params.integration,
-  });
+  const [feed, saved] = await Promise.all([
+    browseObsidianNotes(user.id, current.id, {
+      query: params.q,
+      folder: params.folder,
+      path: params.path,
+      integrationId: params.integration,
+    }),
+    listWorkspaceNotes(user.id, current.id, {
+      query: params.q,
+      id: params.note,
+    }),
+  ]);
+  const atriumNotes = params.folder ? [] : saved.notes;
+  const atriumActive = params.folder ? null : saved.active;
   const folders = [...new Set(feed.notes.map((note) => note.folder).filter(Boolean))].sort();
 
   return (
@@ -60,7 +70,7 @@ async function NotesContent({
         <div className="min-w-0 max-w-2xl">
           <h1 className="text-4xl">Notes</h1>
           <p className="mt-2 text-sm text-muted">
-            Markdown notes from your Self-hosted LiveSync vault — local disk or remote vault bridge.
+            Markdown from a connected Obsidian vault, and notes you save from the button at the bottom right.
           </p>
         </div>
         {canAdmin ? (
@@ -70,14 +80,14 @@ async function NotesContent({
         ) : null}
       </div>
 
-      {feed.connections.length === 0 ? (
+      {feed.connections.length === 0 && atriumNotes.length === 0 ? (
         <div className="rounded-lg border border-dashed bg-card px-4 py-10 text-center">
           <NotebookPen className="mx-auto size-8 text-muted" aria-hidden="true" />
           <p className="mt-3 text-sm text-muted">
             No Obsidian vault connected yet.
             {canAdmin
-              ? " Connect the LiveSync vault path on Integrations, then return here."
-              : " Ask an owner or admin to connect Obsidian."}
+              ? " Connect the LiveSync vault path on Integrations, or write a note with the button at the bottom right."
+              : " Ask an owner or admin to connect Obsidian, or save a note with the button at the bottom right."}
           </p>
           {canAdmin ? (
             <Button asChild className="mt-4">
@@ -154,17 +164,43 @@ async function NotesContent({
         </form>
       ) : null}
 
-      {feed.connections.length > 0 && feed.notes.length === 0 && feed.errors.length === 0 ? (
+      {feed.connections.length > 0 && feed.notes.length === 0 && atriumNotes.length === 0 && feed.errors.length === 0 ? (
         <p className="rounded-lg border border-dashed bg-card px-4 py-8 text-sm text-muted">
           No markdown notes matched. Widen the search or confirm the vault path is readable over your HTTPS proxy.
         </p>
       ) : null}
 
-      {feed.notes.length > 0 ? (
+      {feed.notes.length > 0 || atriumNotes.length > 0 ? (
         <div className="grid min-h-0 flex-1 gap-4 lg:grid-cols-[minmax(16rem,22rem)_minmax(0,1fr)]">
           <ul data-tour="notes-list" className="max-h-[70vh] divide-y overflow-y-auto rounded-lg border bg-card lg:max-h-none">
+            {atriumNotes.map((note) => {
+              const active = atriumActive?.id === note.id;
+              const href = `/notes?${new URLSearchParams({
+                ...(params.q ? { q: params.q } : {}),
+                note: note.id,
+              }).toString()}`;
+              return (
+                <li key={note.id}>
+                  <Link
+                    href={href}
+                    className={cn(
+                      "block px-3 py-3 transition hover:bg-accent/40",
+                      active && "bg-accent/50",
+                    )}
+                  >
+                    <div className="flex items-start gap-2">
+                      <NotebookPen className="mt-0.5 size-4 shrink-0 text-muted" aria-hidden="true" />
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium">{note.title}</p>
+                        <p className="truncate text-xs text-muted">Saved in Atrium</p>
+                      </div>
+                    </div>
+                  </Link>
+                </li>
+              );
+            })}
             {feed.notes.map((note) => {
-              const active = feed.active?.path === note.path && feed.activeIntegrationId === note.integrationId;
+              const active = !atriumActive && feed.active?.path === note.path && feed.activeIntegrationId === note.integrationId;
               const href = `/notes?${new URLSearchParams({
                 ...(params.q ? { q: params.q } : {}),
                 ...(params.folder ? { folder: params.folder } : {}),
@@ -197,7 +233,26 @@ async function NotesContent({
           </ul>
 
           <section data-tour="notes-reader" className="min-h-[20rem] rounded-lg border bg-card">
-            {feed.active ? (
+            {atriumActive ? (
+              <div className="flex h-full min-h-0 flex-col">
+                <header className="border-b px-4 py-3">
+                  <div className="flex flex-wrap items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="text-xs uppercase tracking-[0.16em] text-muted">Note</p>
+                      <h2 className="mt-1 text-2xl leading-tight">{atriumActive.title}</h2>
+                      <p className="mt-1 truncate text-xs text-muted">Saved in Atrium</p>
+                    </div>
+                    <NotebookPen className="size-5 text-muted" aria-hidden="true" />
+                  </div>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <Badge tone="due">Updated {formatWhen(atriumActive.updatedAt)}</Badge>
+                  </div>
+                </header>
+                <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
+                  <MarkdownContent content={atriumActive.body || "_This note is empty._"} />
+                </div>
+              </div>
+            ) : feed.active ? (
               <div className="flex h-full min-h-0 flex-col">
                 <header className="border-b px-4 py-3">
                   <div className="flex flex-wrap items-start justify-between gap-2">

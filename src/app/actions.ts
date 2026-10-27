@@ -9,6 +9,7 @@ import { getAuth } from "@/server/auth/auth";
 import { readSmtpConfig } from "@/server/auth/mail";
 import { logError } from "@/server/log";
 import { getSessionUser } from "@/server/auth/session";
+import { workspaceContext } from "@/server/auth/workspace";
 import { allowRequest } from "@/server/rate-limit";
 import {
   ensurePersonalWorkspace,
@@ -50,8 +51,9 @@ import { markGuideSeen } from "@/server/guides/service";
 import { parseProjectsLayout, type ProjectsLayout } from "@/lib/projects-layout";
 import { parseColorPalette, parseThemeMode } from "@/lib/theme";
 import { createMcpToken, revokeMcpToken } from "@/server/mcp/tokens";
+import { createWorkspaceNote } from "@/server/notes/workspace-notes";
 
-export type ActionState = { error?: string; notice?: string; token?: string; version?: number };
+export type ActionState = { error?: string; notice?: string; token?: string; version?: number; noteId?: string };
 
 async function userId(): Promise<string> {
   const user = await getSessionUser();
@@ -163,6 +165,23 @@ export async function resetPasswordAction(_state: ActionState, formData: FormDat
     return { error: "This reset link is invalid or has expired. Request a new one." };
   }
   redirect("/login?reset=1");
+}
+
+export async function saveWorkspaceNoteAction(_state: ActionState, formData: FormData): Promise<ActionState> {
+  try {
+    const user = await getSessionUser();
+    if (!user) return { error: "Sign in to continue" };
+    const { current } = await workspaceContext(user.id);
+    const noteId = await createWorkspaceNote(user.id, current.id, {
+      title: String(formData.get("title") ?? ""),
+      body: String(formData.get("body") ?? ""),
+    });
+    revalidatePath("/notes");
+    return { notice: "Saved to Notes", noteId };
+  } catch (error) {
+    unstable_rethrow(error);
+    return { error: error instanceof Error ? error.message : "Could not save the note" };
+  }
 }
 
 export async function logoutAction(): Promise<void> {

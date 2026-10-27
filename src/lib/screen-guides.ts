@@ -227,10 +227,10 @@ export const GUIDES = {
   },
   notes: {
     id: "notes",
-    version: 2,
+    version: 3,
     title: "Notes",
     intro:
-      "Notes shows markdown from an Obsidian vault that syncs through Self-hosted LiveSync. Atrium reads the vault. It does not edit your notes.",
+      "Notes lists markdown from a connected Obsidian vault, plus notes you save from the quick-actions button. Atrium reads the vault and does not change those files.",
     tour: [
       {
         target: "notes-filters",
@@ -245,7 +245,7 @@ export const GUIDES = {
       {
         target: "notes-reader",
         title: "Reader",
-        body: "The note's contents. Notes are read-only here, so make edits in Obsidian.",
+        body: "The note's contents. Obsidian files stay read-only. Notes you saved in Atrium open here too.",
       },
     ],
   },
