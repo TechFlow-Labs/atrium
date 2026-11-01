@@ -10,6 +10,7 @@ import { TaskFilters, TaskViewToggle } from "@/components/task-filters";
 type ProjectOption = { id: string; name: string };
 
 export function TasksFilterFrame({
+  workspaceId,
   projects,
   heading,
   actions,
@@ -17,6 +18,7 @@ export function TasksFilterFrame({
   groupRelatedTasks = true,
   children,
 }: {
+  workspaceId: string;
   projects: ProjectOption[];
   heading: ReactNode;
   actions?: ReactNode;
@@ -75,7 +77,7 @@ export function TasksFilterFrame({
         </div>
         {canWrite && values.view !== "board" ? (
           <div data-tour="task-bulk">
-            <TaskBulkActions />
+            <TaskBulkActions workspaceId={workspaceId} />
           </div>
         ) : null}
       </div>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { TaskTransferDialog } from "@/components/task-transfer-dialog";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { MenuSelect } from "@/components/ui/menu-select";
@@ -13,7 +14,21 @@ function taskSelectBoxes(formId: string): HTMLElement[] {
   return [...form.querySelectorAll<HTMLElement>("[data-task-select]")];
 }
 
-export function TaskBulkActions({ formId = TASK_BULK_FORM_ID }: { formId?: string }) {
+function selectedTaskIds(formId: string): string[] {
+  const form = document.getElementById(formId);
+  if (!form) return [];
+  return [...form.querySelectorAll<HTMLElement>("[data-task-select][data-state='checked']")]
+    .map((box) => box.getAttribute("value") ?? box.getAttribute("data-value") ?? "")
+    .filter(Boolean);
+}
+
+export function TaskBulkActions({
+  formId = TASK_BULK_FORM_ID,
+  workspaceId,
+}: {
+  formId?: string;
+  workspaceId: string;
+}) {
   const [selectState, setSelectState] = useState<boolean | "indeterminate">(false);
 
   function syncSelection() {
@@ -88,6 +103,14 @@ export function TaskBulkActions({ formId = TASK_BULK_FORM_ID }: { formId?: strin
       <Button type="submit" form={formId} variant="outline">
         Apply to selected
       </Button>
+      <TaskTransferDialog
+        workspaceId={workspaceId}
+        triggerLabel="Transfer"
+        onBeforeOpen={() => {
+          const ids = selectedTaskIds(formId);
+          return ids.length > 0 ? ids : null;
+        }}
+      />
     </div>
   );
 }

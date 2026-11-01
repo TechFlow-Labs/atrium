@@ -488,3 +488,166 @@ export async function bulkUpdateTasks(
   }
   return count;
 }
+
+export type TransferTasksResult = {
+  transferred: Array<{ fromId: string; toId: string }>;
+};
+
+/**
+ * Copy tasks into another workspace/project, then soft-delete the sources.
+ * workspace_id is immutable in the DB, so transfer is recreate + archive.
+ */
+export async function transferTasks(
+  userId: string,
+  sourceWorkspaceId: string,
+  input: { ids: string[]; destinationWorkspaceId: string; destinationProjectId: string },
+): Promise<TransferTasksResult> {
+  const ids = [...new Set(input.ids.map(String).filter(Boolean))];
+  if (ids.length === 0) throw new Error("Choose at least one task");
+  if (ids.length > 100) throw new Error("Transfers are limited to 100 tasks");
+  if (!input.destinationWorkspaceId) throw new Error("Choose a destination workspace");
+  if (!input.destinationProjectId) throw new Error("Choose a destination project");
+  if (input.destinationWorkspaceId === sourceWorkspaceId) {
+    throw new Error("Choose a different workspace to transfer into");
+  }
+
+  await withUser(userId, async (tx) => {
+    await requireAction(tx, sourceWorkspaceId, "task.write");
+    await requireAction(tx, input.destinationWorkspaceId, "task.write");
+    const project = await tx.execute<{ id: string; status: string }>(sql`
+      select id, status from projects
+      where id = ${input.destinationProjectId}::uuid
+        and workspace_id = ${input.destinationWorkspaceId}::uuid
+    `);
+    if (!project[0] || project[0].status !== "active") {
+      throw new Error("Active destination project not found");
+    }
+  });
+
+  const sourceTasks = await listTasks(userId, sourceWorkspaceId, {});
+  const selected = ids.map((id) => {
+    const task = sourceTasks.find((row) => row.id === id);
+    if (!task || task.deleted_at) throw new Error("One of the selected tasks is no longer available");
+    return task;
+  });
+
+  const linkRows = await withUser(userId, async (tx) => {
+    await requireAction(tx, sourceWorkspaceId, "task.read");
+    return tx.execute<{ from_task_id: string; to_task_id: string; link_type: string }>(sql`
+      select from_task_id, to_task_id, link_type
+      from task_links
+      where workspace_id = ${sourceWorkspaceId}::uuid
+        and from_task_id = any(${textArray(ids)}::uuid[])
+        and to_task_id = any(${textArray(ids)}::uuid[])
+    `);
+  });
+
+  const idMap = new Map<string, string>();
+  for (const task of selected) {
+    const keepAssignee = task.assignee_user_id
+      ? await withUser(userId, async (tx) => {
+          const rows = await tx.execute<{ id: string }>(sql`
+            select user_id as id from workspace_members
+            where workspace_id = ${input.destinationWorkspaceId}::uuid
+              and user_id = ${task.assignee_user_id}::uuid
+            limit 1
+          `);
+          return Boolean(rows[0]);
+        })
+      : false;
+
+    const newId = await createTask(userId, input.destinationWorkspaceId, {
+      projectId: input.destinationProjectId,
+      title: task.title,
+      description: task.description,
+      status: task.status,
+      priority: task.priority,
+      dueAt: task.due_at ? new Date(task.due_at).toISOString() : null,
+      assigneeUserId: keepAssignee ? task.assignee_user_id : null,
+      milestoneId: null,
+    });
+    idMap.set(task.id, newId);
+
+    await withUser(userId, async (tx) => {
+      await requireAction(tx, sourceWorkspaceId, "task.write");
+      await requireAction(tx, input.destinationWorkspaceId, "task.write");
+
+      await tx.execute(sql`
+        insert into task_comments (workspace_id, task_id, body, author_user_id, created_at)
+        select
+          ${input.destinationWorkspaceId}::uuid,
+          ${newId}::uuid,
+          body,
+          author_user_id,
+          created_at
+        from task_comments
+        where task_id = ${task.id}::uuid
+        order by created_at asc
+      `);
+
+      const removed = await tx.execute<{ id: string }>(sql`
+        update tasks
+        set deleted_at = coalesce(deleted_at, now()),
+            sync_state = 'tombstone',
+            version = version + 1
+        where id = ${task.id}::uuid
+          and workspace_id = ${sourceWorkspaceId}::uuid
+          and deleted_at is null
+        returning id
+      `);
+      if (!removed[0]) throw new Error("One of the selected tasks is no longer available");
+
+      await tx.execute(sql`
+        delete from task_links
+        where workspace_id = ${sourceWorkspaceId}::uuid
+          and (from_task_id = ${task.id}::uuid or to_task_id = ${task.id}::uuid)
+      `);
+
+      await writeAudit(tx, {
+        workspaceId: sourceWorkspaceId,
+        action: "task.transferred",
+        entityType: "task",
+        entityId: task.id,
+        metadata: {
+          toWorkspaceId: input.destinationWorkspaceId,
+          toProjectId: input.destinationProjectId,
+          toTaskId: newId,
+        },
+      });
+      await writeAudit(tx, {
+        workspaceId: input.destinationWorkspaceId,
+        action: "task.transferred_in",
+        entityType: "task",
+        entityId: newId,
+        metadata: {
+          fromWorkspaceId: sourceWorkspaceId,
+          fromTaskId: task.id,
+        },
+      });
+    });
+  }
+
+  for (const link of linkRows) {
+    const fromId = idMap.get(link.from_task_id);
+    const toId = idMap.get(link.to_task_id);
+    if (!fromId || !toId || fromId === toId) continue;
+    await withUser(userId, async (tx) => {
+      await requireAction(tx, input.destinationWorkspaceId, "task.write");
+      await tx.execute(sql`
+        insert into task_links (workspace_id, from_task_id, to_task_id, link_type, created_by)
+        values (
+          ${input.destinationWorkspaceId}::uuid,
+          ${fromId}::uuid,
+          ${toId}::uuid,
+          ${link.link_type},
+          current_setting('app.current_user_id', true)
+        )
+        on conflict do nothing
+      `);
+    });
+  }
+
+  return {
+    transferred: [...idMap.entries()].map(([fromId, toId]) => ({ fromId, toId })),
+  };
+}

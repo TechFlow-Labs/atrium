@@ -100,6 +100,7 @@ async function TasksShell({ children }: { children: React.ReactNode }) {
     <div className="flex min-h-0 flex-1 flex-col">
       <Suspense fallback={<ResultsLoader label="Loading filters" />}>
         <TasksFilterFrame
+          workspaceId={current.id}
           projects={projectOptions}
           canWrite={canWrite}
           groupRelatedTasks={groupRelatedTasks}

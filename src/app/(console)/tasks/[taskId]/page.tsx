@@ -8,6 +8,7 @@ import { OpenInProviderButton, ProviderIcon, providerLabel } from "@/components/
 import { TaskComments } from "@/components/task-comments";
 import { TaskDetailForm } from "@/components/task-detail-form";
 import { TaskLinks } from "@/components/task-links";
+import { TaskTransferDialog } from "@/components/task-transfer-dialog";
 import { getSessionUser } from "@/server/auth/session";
 import { workspaceContext } from "@/server/auth/workspace";
 import { listTaskComments } from "@/server/tasks/comments";
@@ -72,11 +73,20 @@ async function TaskDetailContent({
             </p>
           </div>
         </div>
-        {task.external_url ? (
-          <div data-tour="task-provider">
-            <OpenInProviderButton provider={task.provider} href={task.external_url} />
-          </div>
-        ) : null}
+        <div className="flex flex-wrap items-center gap-2">
+          {canWrite ? (
+            <TaskTransferDialog
+              workspaceId={task.workspace_id}
+              taskIds={[task.id]}
+              triggerLabel="Transfer"
+            />
+          ) : null}
+          {task.external_url ? (
+            <div data-tour="task-provider">
+              <OpenInProviderButton provider={task.provider} href={task.external_url} />
+            </div>
+          ) : null}
+        </div>
       </div>
 
       <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(20rem,26rem)]">

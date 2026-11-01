@@ -18,15 +18,22 @@ import {
   deleteWorkspaceContext,
   inviteMember,
   acceptInvitation,
+  listWorkspaces,
   setMemberRole,
   removeMember,
   updateWorkspace,
   updateWorkspaceKind,
 } from "@/server/workspaces/service";
-import { archiveProject, createMilestone, createNativeProject, updateProject } from "@/server/projects/service";
+import {
+  archiveProject,
+  createMilestone,
+  createNativeProject,
+  listProjects,
+  updateProject,
+} from "@/server/projects/service";
 import { addTaskComment } from "@/server/tasks/comments";
 import { addTaskLink, removeTaskLink, searchTasksForLink } from "@/server/tasks/links";
-import { bulkUpdateTasks, createTask, updateTask } from "@/server/tasks/service";
+import { bulkUpdateTasks, createTask, transferTasks, updateTask } from "@/server/tasks/service";
 import {
   addFakeRemoteProject,
   beginOAuth,
@@ -504,6 +511,75 @@ export async function bulkTaskAction(formData: FormData): Promise<void> {
     priority: formData.get("priority") ? (String(formData.get("priority")) as "high") : undefined,
   });
   redirect("/tasks");
+}
+
+export async function listTransferDestinationsAction(
+  sourceWorkspaceId: string,
+): Promise<
+  | { workspaces: Array<{ id: string; name: string; kind: string }> }
+  | { error: string }
+> {
+  try {
+    const user = await userId();
+    const workspaces = await listWorkspaces(user);
+    return {
+      workspaces: workspaces
+        .filter((workspace) => workspace.id !== sourceWorkspaceId && workspace.role !== "viewer")
+        .map((workspace) => ({ id: workspace.id, name: workspace.name, kind: workspace.kind })),
+    };
+  } catch (error) {
+    unstable_rethrow(error);
+    return { error: error instanceof Error ? error.message : "Could not load workspaces" };
+  }
+}
+
+export async function listTransferProjectsAction(
+  destinationWorkspaceId: string,
+): Promise<{ projects: Array<{ id: string; name: string }> } | { error: string }> {
+  try {
+    const user = await userId();
+    const projects = await listProjects(user, destinationWorkspaceId, { status: "active" });
+    return {
+      projects: projects.map((project) => ({
+        id: project.id,
+        name: project.nickname?.trim() || project.name,
+      })),
+    };
+  } catch (error) {
+    unstable_rethrow(error);
+    return { error: error instanceof Error ? error.message : "Could not load projects" };
+  }
+}
+
+export async function transferTasksAction(
+  _state: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const sourceWorkspaceId = String(formData.get("workspaceId") ?? "");
+  const destinationWorkspaceId = String(formData.get("destinationWorkspaceId") ?? "");
+  const destinationProjectId = String(formData.get("destinationProjectId") ?? "");
+  const ids = formData.getAll("ids").map(String).filter(Boolean);
+  try {
+    const result = await transferTasks(await userId(), sourceWorkspaceId, {
+      ids,
+      destinationWorkspaceId,
+      destinationProjectId,
+    });
+    (await cookies()).set("atrium_workspace", destinationWorkspaceId, {
+      httpOnly: true,
+      sameSite: "lax",
+      path: "/",
+      secure: process.env.NODE_ENV === "production",
+    });
+    revalidatePath("/tasks");
+    if (result.transferred.length === 1) {
+      redirect(`/tasks/${result.transferred[0].toId}`);
+    }
+    redirect("/tasks");
+  } catch (error) {
+    unstable_rethrow(error);
+    return { error: error instanceof Error ? error.message : "Could not transfer the tasks" };
+  }
 }
 
 export async function connectTokenAction(_state: ActionState, formData: FormData): Promise<ActionState> {
