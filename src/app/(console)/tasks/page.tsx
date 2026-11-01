@@ -205,6 +205,7 @@ async function TasksResults({
       <input type="hidden" name="workspaceId" value={current.id} />
       <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto">
         <TaskList
+          workspaceId={current.id}
           canWrite={canWrite}
           providerTileStyles={providerTileStyles}
           groupRelated={groupRelatedTasks}

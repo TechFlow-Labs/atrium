@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { TaskDeleteDialog } from "@/components/task-delete-dialog";
 import { TaskTransferDialog } from "@/components/task-transfer-dialog";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -20,6 +21,21 @@ function selectedTaskIds(formId: string): string[] {
   return [...form.querySelectorAll<HTMLElement>("[data-task-select][data-state='checked']")]
     .map((box) => box.getAttribute("value") ?? box.getAttribute("data-value") ?? "")
     .filter(Boolean);
+}
+
+function selectedTasksMeta(formId: string): { ids: string[]; hasRemote: boolean } {
+  const form = document.getElementById(formId);
+  if (!form) return { ids: [], hasRemote: false };
+  const boxes = [...form.querySelectorAll<HTMLElement>("[data-task-select][data-state='checked']")];
+  const ids = boxes
+    .map((box) => box.getAttribute("value") ?? box.getAttribute("data-value") ?? "")
+    .filter(Boolean);
+  const hasRemote = boxes.some((box) => {
+    const provider = box.getAttribute("data-task-provider") ?? "";
+    const external = box.getAttribute("data-task-external") ?? "";
+    return Boolean(provider) || external === "1";
+  });
+  return { ids, hasRemote };
 }
 
 export function TaskBulkActions({
@@ -109,6 +125,15 @@ export function TaskBulkActions({
         onBeforeOpen={() => {
           const ids = selectedTaskIds(formId);
           return ids.length > 0 ? ids : null;
+        }}
+      />
+      <TaskDeleteDialog
+        workspaceId={workspaceId}
+        triggerLabel="Delete"
+        triggerVariant="outline"
+        onBeforeOpen={() => {
+          const next = selectedTasksMeta(formId);
+          return next.ids.length > 0 ? next : null;
         }}
       />
     </div>

@@ -8,6 +8,7 @@ import { OpenInProviderButton, ProviderIcon, providerLabel } from "@/components/
 import { TaskComments } from "@/components/task-comments";
 import { TaskDetailForm } from "@/components/task-detail-form";
 import { TaskLinks } from "@/components/task-links";
+import { TaskDeleteDialog } from "@/components/task-delete-dialog";
 import { TaskTransferDialog } from "@/components/task-transfer-dialog";
 import { getSessionUser } from "@/server/auth/session";
 import { workspaceContext } from "@/server/auth/workspace";
@@ -75,11 +76,20 @@ async function TaskDetailContent({
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {canWrite ? (
-            <TaskTransferDialog
-              workspaceId={task.workspace_id}
-              taskIds={[task.id]}
-              triggerLabel="Transfer"
-            />
+            <>
+              <TaskTransferDialog
+                workspaceId={task.workspace_id}
+                taskIds={[task.id]}
+                triggerLabel="Transfer"
+              />
+              <TaskDeleteDialog
+                workspaceId={task.workspace_id}
+                taskIds={[task.id]}
+                hasRemoteTasks={Boolean(task.provider) || Boolean(task.external_url)}
+                triggerLabel="Delete"
+                triggerVariant="outline"
+              />
+            </>
           ) : null}
           {task.external_url ? (
             <div data-tour="task-provider">

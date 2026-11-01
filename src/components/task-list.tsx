@@ -8,6 +8,7 @@ import {
   providerKey,
   providerLabel,
 } from "@/components/provider-icon";
+import { TaskDeleteDialog } from "@/components/task-delete-dialog";
 import { PriorityIcon, StatusIcon, SyncStateIcon, syncStateLabel } from "@/components/task-meta-icons";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -40,12 +41,14 @@ export type TaskListItem = {
 export function TaskList({
   tasks,
   canWrite,
+  workspaceId,
   providerTileStyles = true,
   groupRelated = true,
   linkEdges = [],
 }: {
   tasks: TaskListItem[];
   canWrite: boolean;
+  workspaceId: string;
   providerTileStyles?: boolean;
   groupRelated?: boolean;
   linkEdges?: TaskLinkEdge[];
@@ -58,6 +61,7 @@ export function TaskList({
             key={task.id}
             task={task}
             canWrite={canWrite}
+            workspaceId={workspaceId}
             providerTileStyles={providerTileStyles}
           />
         ))}
@@ -76,6 +80,7 @@ export function TaskList({
               <TaskListRow
                 task={segment.task}
                 canWrite={canWrite}
+                workspaceId={workspaceId}
                 providerTileStyles={providerTileStyles}
               />
             </ul>
@@ -104,6 +109,7 @@ export function TaskList({
                     key={task.id}
                     task={task}
                     canWrite={canWrite}
+                    workspaceId={workspaceId}
                     providerTileStyles={providerTileStyles}
                     related
                     relations={
@@ -160,17 +166,20 @@ function RelationConnector({ relations }: { relations: RelationDescriptor[] }) {
 function TaskListRow({
   task,
   canWrite,
+  workspaceId,
   providerTileStyles,
   related = false,
   relations,
 }: {
   task: TaskListItem;
   canWrite: boolean;
+  workspaceId: string;
   providerTileStyles: boolean;
   related?: boolean;
   relations?: RelationDescriptor[];
 }) {
   const accent = providerTileStyles ? taskProviderAccent(task.provider) : null;
+  const isRemote = Boolean(task.provider) || Boolean(task.externalUrl);
   return (
     <li className={cn("relative flex items-stretch", accent && accent.wash)}>
       {relations?.length ? <RelationConnector relations={relations} /> : null}
@@ -184,6 +193,8 @@ function TaskListRow({
             value={task.id}
             aria-label={`Select ${task.title}`}
             data-task-select=""
+            data-task-provider={task.provider ?? ""}
+            data-task-external={task.externalUrl ? "1" : "0"}
           />
         </div>
       ) : null}
@@ -193,7 +204,7 @@ function TaskListRow({
         aria-label={`Open ${task.title}`}
         className={cn(
           "grid min-w-0 flex-1 grid-cols-1 items-start gap-x-3 gap-y-3 p-3 sm:p-4",
-          "lg:grid-cols-[minmax(14rem,2.2fr)_minmax(10rem,1.2fr)_7rem_8rem_8rem] lg:items-center lg:gap-x-5",
+          "lg:grid-cols-[minmax(14rem,2fr)_minmax(10rem,1.1fr)_7rem_7.5rem_7.5rem_2.5rem] lg:items-center lg:gap-x-5",
           "transition-colors hover:bg-accent/40 focus-visible:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset",
           !canWrite && "pl-3 sm:pl-4",
         )}
@@ -233,6 +244,23 @@ function TaskListRow({
           </Meta>
         </div>
       </Link>
+
+      {canWrite ? (
+        <div
+          className="flex shrink-0 items-start px-2 pt-3 sm:px-3 sm:pt-4 lg:items-center lg:pt-0"
+          onClick={(event) => event.stopPropagation()}
+        >
+          <TaskDeleteDialog
+            workspaceId={workspaceId}
+            taskIds={[task.id]}
+            hasRemoteTasks={isRemote}
+            triggerLabel={`Delete ${task.title}`}
+            triggerVariant="ghost"
+            triggerSize="icon"
+            triggerClassName="text-muted hover:text-destructive"
+          />
+        </div>
+      ) : null}
     </li>
   );
 }

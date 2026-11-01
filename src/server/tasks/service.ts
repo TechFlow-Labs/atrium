@@ -489,6 +489,117 @@ export async function bulkUpdateTasks(
   return count;
 }
 
+/**
+ * Soft-delete tasks in Atrium. Optionally enqueue provider archives for synced issues.
+ */
+export async function deleteTasks(
+  userId: string,
+  workspaceId: string,
+  input: { ids: string[]; alsoRemote?: boolean },
+): Promise<number> {
+  const ids = [...new Set(input.ids.map(String).filter(Boolean))];
+  if (ids.length === 0) throw new Error("Choose at least one task");
+  if (ids.length > 100) throw new Error("Deletes are limited to 100 tasks");
+
+  return withUser(userId, async (tx) => {
+    await requireAction(tx, workspaceId, "task.write");
+    let count = 0;
+
+    for (const taskId of ids) {
+      const existing = await tx.execute<{
+        id: string;
+        project_id: string;
+        ownership_mode: "native" | "external" | "hybrid";
+        provider_task_id: string | null;
+      }>(sql`
+        select t.id, t.project_id, p.ownership_mode, e.provider_id as provider_task_id
+        from tasks t
+        join projects p on p.id = t.project_id
+        left join external_records e
+          on e.local_entity_id = t.id
+         and e.entity_type = 'issue'
+         and e.deleted_at is null
+        where t.id = ${taskId}::uuid
+          and t.workspace_id = ${workspaceId}::uuid
+          and t.deleted_at is null
+      `);
+      const task = existing[0];
+      if (!task) throw new Error("One of the selected tasks is no longer available");
+      if (task.ownership_mode === "hybrid") {
+        throw new Error("Hybrid ownership is reserved and is not enabled");
+      }
+
+      const removed = await tx.execute<{ id: string }>(sql`
+        update tasks
+        set deleted_at = coalesce(deleted_at, now()),
+            sync_state = 'tombstone',
+            version = version + 1
+        where id = ${taskId}::uuid
+          and workspace_id = ${workspaceId}::uuid
+          and deleted_at is null
+        returning id
+      `);
+      if (!removed[0]) throw new Error("One of the selected tasks is no longer available");
+
+      await tx.execute(sql`
+        update external_records
+        set deleted_at = coalesce(deleted_at, now())
+        where local_entity_id = ${taskId}::uuid
+          and entity_type = 'issue'
+          and deleted_at is null
+      `);
+
+      await tx.execute(sql`
+        delete from task_links
+        where workspace_id = ${workspaceId}::uuid
+          and (from_task_id = ${taskId}::uuid or to_task_id = ${taskId}::uuid)
+      `);
+
+      const connection = await loadConnection(tx, task.project_id);
+      const canPushRemote =
+        Boolean(input.alsoRemote)
+        && Boolean(task.provider_task_id)
+        && Boolean(connection)
+        && connection!.status === "connected"
+        && Boolean(connection!.credential_ciphertext)
+        && (task.ownership_mode === "external" || Boolean(connection!.publish_outbound))
+        && getAdapter(connection!.provider).getCapabilities().archiveTask
+        && Boolean(connection!.provider_project_id);
+
+      if (canPushRemote && connection && task.provider_task_id) {
+        if (!connection.provider_project_id) {
+          throw new Error("Could not archive one of the provider issues");
+        }
+        await enqueueOutbox(tx, {
+          workspaceId,
+          integrationId: connection.integration_id,
+          taskId,
+          projectId: task.project_id,
+          connectionId: connection.id,
+          providerProjectId: connection.provider_project_id,
+          providerTaskId: task.provider_task_id,
+          kind: "archive",
+          touched: ["status"],
+        });
+      }
+
+      await writeAudit(tx, {
+        workspaceId,
+        action: "task.deleted",
+        entityType: "task",
+        entityId: taskId,
+        metadata: {
+          alsoRemote: Boolean(input.alsoRemote && canPushRemote),
+          providerTaskId: task.provider_task_id,
+        },
+      });
+      count += 1;
+    }
+
+    return count;
+  });
+}
+
 export type TransferTasksResult = {
   transferred: Array<{ fromId: string; toId: string }>;
 };

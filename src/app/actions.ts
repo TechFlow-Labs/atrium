@@ -33,7 +33,7 @@ import {
 } from "@/server/projects/service";
 import { addTaskComment } from "@/server/tasks/comments";
 import { addTaskLink, removeTaskLink, searchTasksForLink } from "@/server/tasks/links";
-import { bulkUpdateTasks, createTask, transferTasks, updateTask } from "@/server/tasks/service";
+import { bulkUpdateTasks, createTask, deleteTasks, transferTasks, updateTask } from "@/server/tasks/service";
 import {
   addFakeRemoteProject,
   beginOAuth,
@@ -511,6 +511,26 @@ export async function bulkTaskAction(formData: FormData): Promise<void> {
     priority: formData.get("priority") ? (String(formData.get("priority")) as "high") : undefined,
   });
   redirect("/tasks");
+}
+
+export async function deleteTasksAction(
+  _state: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const workspaceId = String(formData.get("workspaceId") ?? "");
+  const ids = formData.getAll("ids").map(String).filter(Boolean);
+  const alsoRemote = formData.get("alsoRemote") === "on" || formData.get("alsoRemote") === "true";
+  const returnTo = String(formData.get("returnTo") ?? "/tasks");
+  try {
+    await deleteTasks(await userId(), workspaceId, { ids, alsoRemote });
+    revalidatePath("/tasks");
+    revalidatePath("/home");
+    for (const id of ids) revalidatePath(`/tasks/${id}`);
+    redirect(returnTo.startsWith("/") ? returnTo : "/tasks");
+  } catch (error) {
+    unstable_rethrow(error);
+    return { error: error instanceof Error ? error.message : "Could not delete the tasks" };
+  }
 }
 
 export async function listTransferDestinationsAction(
