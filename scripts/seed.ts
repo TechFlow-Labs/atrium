@@ -19,6 +19,16 @@ async function ensureUser(email: string, name: string): Promise<string> {
   return id;
 }
 
+async function countActiveProjects(workspaceId: string): Promise<number> {
+  const { getDb } = await import("../src/server/db/client");
+  const { sql } = await import("drizzle-orm");
+  const rows = await getDb().execute<{ count: number }>(sql`
+    select count(*)::int as count from projects
+    where workspace_id = ${workspaceId}::uuid and status = 'active'
+  `);
+  return Number(rows[0]?.count ?? 0);
+}
+
 async function main(): Promise<void> {
   const { closeDb } = await import("../src/server/db/client");
   const { ensurePersonalWorkspace, createWorkspace, inviteMember, acceptInvitation, listWorkspaces } = await import(
@@ -32,37 +42,124 @@ async function main(): Promise<void> {
   await ensurePersonalWorkspace(mira, "Mira Vell");
   await ensurePersonalWorkspace(jonas, "Jonas Reid");
 
+  const dueIn = (days: number) => {
+    const date = new Date();
+    date.setUTCDate(date.getUTCDate() + days);
+    return date.toISOString();
+  };
+
   const miraSpaces = await listWorkspaces(mira);
+  const miraPersonal = miraSpaces.find((workspace) => workspace.kind === "personal");
+  if (miraPersonal && (await countActiveProjects(miraPersonal.id)) === 0) {
+    const garden = await createNativeProject(mira, miraPersonal.id, {
+      name: "Garden plans",
+      description: "Mira's personal workspace seed.",
+    });
+    await createTask(mira, miraPersonal.id, {
+      projectId: garden,
+      title: "Order spring bulbs",
+      priority: "medium",
+      status: "open",
+      dueAt: dueIn(5),
+    });
+    await createTask(mira, miraPersonal.id, {
+      projectId: garden,
+      title: "Fix the potting bench",
+      priority: "low",
+      status: "in_progress",
+      dueAt: dueIn(8),
+    });
+  }
+
   if (!miraSpaces.some((workspace) => workspace.name === "Northwind Studio")) {
     const workId = await createWorkspace(mira, { name: "Northwind Studio", kind: "work" });
     const launch = await createNativeProject(mira, workId, {
       name: "Launch board",
       description: "Native work owned by this workspace.",
     });
-    const week = new Date();
-    week.setUTCDate(week.getUTCDate() + 3);
-    await createTask(mira, workId, {
+    const vendor = await createTask(mira, workId, {
       projectId: launch,
       title: "Confirm the vendor shortlist",
       description: "Three studios replied. Pick one before Friday.",
       priority: "urgent",
       status: "in_progress",
-      dueAt: week.toISOString(),
+      dueAt: dueIn(3),
     });
-    await createTask(mira, workId, {
+    const contract = await createTask(mira, workId, {
       projectId: launch,
       title: "Unblock the contract review",
       priority: "high",
       status: "blocked",
+      dueAt: dueIn(5),
     });
-    await createTask(mira, workId, {
+    const note = await createTask(mira, workId, {
       projectId: launch,
       title: "Publish the internal note",
       priority: "medium",
       status: "open",
+      dueAt: dueIn(7),
+    });
+    const { addTaskLink } = await import("../src/server/tasks/links");
+    await addTaskLink(mira, workId, {
+      fromTaskId: contract,
+      toTaskId: vendor,
+      linkType: "blocks",
+    });
+    await addTaskLink(mira, workId, {
+      fromTaskId: note,
+      toTaskId: vendor,
+      linkType: "relates_to",
     });
     const invite = await inviteMember(mira, workId, { email: "jonas.reid@atrium.local", role: "member" });
     await acceptInvitation(jonas, invite.token);
+  } else {
+    // Idempotent demo links for an already-seeded Northwind Studio.
+    const northwind = miraSpaces.find((workspace) => workspace.name === "Northwind Studio");
+    if (northwind) {
+      const { withUser } = await import("../src/server/db/client");
+      const { sql } = await import("drizzle-orm");
+      const { addTaskLink } = await import("../src/server/tasks/links");
+      const linkCount = await withUser(mira, async (tx) =>
+        tx.execute<{ count: number }>(sql`
+          select count(*)::int as count from task_links
+          where workspace_id = ${northwind.id}::uuid
+        `),
+      );
+      if (Number(linkCount[0]?.count ?? 0) === 0) {
+        const demoTasks = await withUser(mira, async (tx) =>
+          tx.execute<{ id: string; title: string }>(sql`
+            select t.id, t.title from tasks t
+            join projects p on p.id = t.project_id
+            where t.workspace_id = ${northwind.id}::uuid
+              and t.deleted_at is null
+              and p.name = 'Launch board'
+              and t.title in (
+                'Confirm the vendor shortlist',
+                'Unblock the contract review',
+                'Publish the internal note'
+              )
+          `),
+        );
+        const byTitle = new Map(demoTasks.map((row) => [row.title, row.id]));
+        const vendor = byTitle.get("Confirm the vendor shortlist");
+        const contract = byTitle.get("Unblock the contract review");
+        const note = byTitle.get("Publish the internal note");
+        if (vendor && contract) {
+          await addTaskLink(mira, northwind.id, {
+            fromTaskId: contract,
+            toTaskId: vendor,
+            linkType: "blocks",
+          });
+        }
+        if (vendor && note) {
+          await addTaskLink(mira, northwind.id, {
+            fromTaskId: note,
+            toTaskId: vendor,
+            linkType: "relates_to",
+          });
+        }
+      }
+    }
   }
 
   const refreshed = await listWorkspaces(mira);
@@ -77,6 +174,36 @@ async function main(): Promise<void> {
       title: "File the quarter receipts",
       priority: "low",
       status: "open",
+      dueAt: dueIn(4),
+    });
+  }
+
+  const jonasSpaces = await listWorkspaces(jonas);
+  const jonasPersonal = jonasSpaces.find((workspace) => workspace.kind === "personal");
+  if (jonasPersonal && (await countActiveProjects(jonasPersonal.id)) === 0) {
+    const study = await createNativeProject(jonas, jonasPersonal.id, {
+      name: "Study track",
+      description: "Jonas's personal workspace seed.",
+    });
+    await createTask(jonas, jonasPersonal.id, {
+      projectId: study,
+      title: "Finish the RLS notes",
+      priority: "high",
+      status: "in_progress",
+      dueAt: dueIn(2),
+    });
+    await createTask(jonas, jonasPersonal.id, {
+      projectId: study,
+      title: "Practice the sync walkthrough",
+      priority: "medium",
+      status: "open",
+      dueAt: dueIn(6),
+    });
+    await createTask(jonas, jonasPersonal.id, {
+      projectId: study,
+      title: "Park the abandoned sketch",
+      priority: "none",
+      status: "cancelled",
     });
   }
 

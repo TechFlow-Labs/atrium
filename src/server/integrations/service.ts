@@ -267,7 +267,8 @@ export async function testIntegration(userId: string, workspaceId: string, integ
 
 export async function listRemoteProjects(userId: string, workspaceId: string, integrationId: string): Promise<RemoteProject[]> {
   return withUser(userId, async (tx) => {
-    await requireAction(tx, workspaceId, "integration.manage");
+    // task.write so members can pick a remote project when creating a synced task.
+    await requireAction(tx, workspaceId, "task.write");
     const { adapter, ctx } = await adapterContext(tx, integrationId);
     const projects: RemoteProject[] = [];
     let cursor: string | null = null;
@@ -280,6 +281,23 @@ export async function listRemoteProjects(userId: string, workspaceId: string, in
   });
 }
 
+async function findLinkedProjectId(
+  tx: Tx,
+  workspaceId: string,
+  integrationId: string,
+  providerProjectId: string,
+): Promise<string | null> {
+  const rows = await tx.execute<{ project_id: string }>(sql`
+    select project_id
+    from project_connections
+    where workspace_id = ${workspaceId}::uuid
+      and integration_id = ${integrationId}::uuid
+      and provider_project_id = ${providerProjectId}
+    limit 1
+  `);
+  return rows[0]?.project_id ?? null;
+}
+
 export async function createExternalProject(
   userId: string,
   workspaceId: string,
@@ -287,6 +305,8 @@ export async function createExternalProject(
 ): Promise<string> {
   return withUser(userId, async (tx) => {
     await requireAction(tx, workspaceId, "project.create");
+    const existing = await findLinkedProjectId(tx, workspaceId, input.integrationId, input.providerProjectId);
+    if (existing) return existing;
     const integrations = await tx.execute<{ provider: IntegrationProviderId; status: string }>(sql`
       select provider, status from integrations
       where id = ${input.integrationId}::uuid and workspace_id = ${workspaceId}::uuid
@@ -339,6 +359,20 @@ export async function createExternalProject(
     });
     return projectId;
   });
+}
+
+/** Resolve an already-linked project, or link the remote board then return its Atrium id. */
+export async function ensureExternalProjectForTask(
+  userId: string,
+  workspaceId: string,
+  input: { integrationId: string; providerProjectId: string; name: string; key?: string | null; url?: string | null },
+): Promise<string> {
+  const linked = await withUser(userId, async (tx) => {
+    await requireAction(tx, workspaceId, "task.write");
+    return findLinkedProjectId(tx, workspaceId, input.integrationId, input.providerProjectId);
+  });
+  if (linked) return linked;
+  return createExternalProject(userId, workspaceId, input);
 }
 
 export async function updateFieldMappings(

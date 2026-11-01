@@ -52,33 +52,35 @@ export function WorkspaceIconPicker({
         >
           <p className="mb-3 text-xs text-muted">Pick an icon for the sidebar and workspace switcher.</p>
           <div
-            className="grid max-h-56 grid-cols-4 gap-2 overflow-y-auto sm:grid-cols-6"
+            className="max-h-64 overflow-y-auto p-1.5"
             role="listbox"
             aria-label="Workspace icons"
           >
-            {WORKSPACE_ICONS.map((icon) => {
-              const active = icon === selected;
-              return (
-                <button
-                  key={icon}
-                  type="button"
-                  role="option"
-                  aria-selected={active}
-                  aria-label={`Workspace icon ${icon}`}
-                  className={cn(
-                    "flex aspect-square items-center justify-center rounded-xl border bg-background text-2xl transition",
-                    "hover:border-foreground/20 hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                    active && "border-foreground/25 bg-accent/50 ring-2 ring-ring",
-                  )}
-                  onClick={() => {
-                    setSelected(icon);
-                    setOpen(false);
-                  }}
-                >
-                  <span aria-hidden="true">{icon}</span>
-                </button>
-              );
-            })}
+            <div className="grid grid-cols-4 gap-2.5 sm:grid-cols-6">
+              {WORKSPACE_ICONS.map((icon) => {
+                const active = icon === selected;
+                return (
+                  <button
+                    key={icon}
+                    type="button"
+                    role="option"
+                    aria-selected={active}
+                    aria-label={`Workspace icon ${icon}`}
+                    className={cn(
+                      "flex aspect-square items-center justify-center rounded-xl border bg-background text-2xl transition",
+                      "hover:border-foreground/20 hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                      active && "border-foreground/25 bg-accent/50 ring-2 ring-ring",
+                    )}
+                    onClick={() => {
+                      setSelected(icon);
+                      setOpen(false);
+                    }}
+                  >
+                    <span aria-hidden="true">{icon}</span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
         </PopoverContent>
       </Popover>

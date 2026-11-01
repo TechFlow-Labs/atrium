@@ -73,14 +73,23 @@ export async function readProfilePreferences(userId: string): Promise<{
 export async function readAppearanceFlags(userId: string): Promise<{
   animationsEnabled: boolean;
   providerTileStyles: boolean;
+  groupRelatedTasks: boolean;
 } | null> {
   return withUser(userId, async (tx) => {
-    const rows = await tx.execute<{ animations_enabled: boolean; provider_tile_styles: boolean }>(sql`
-      select animations_enabled, provider_tile_styles from user_preferences
+    const rows = await tx.execute<{
+      animations_enabled: boolean;
+      provider_tile_styles: boolean;
+      group_related_tasks: boolean;
+    }>(sql`
+      select animations_enabled, provider_tile_styles, group_related_tasks from user_preferences
       where user_id = current_setting('app.current_user_id', true)
     `);
     const row = rows[0];
     if (!row) return null;
-    return { animationsEnabled: row.animations_enabled !== false, providerTileStyles: row.provider_tile_styles !== false };
+    return {
+      animationsEnabled: row.animations_enabled !== false,
+      providerTileStyles: row.provider_tile_styles !== false,
+      groupRelatedTasks: row.group_related_tasks !== false,
+    };
   });
 }

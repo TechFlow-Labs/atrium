@@ -231,10 +231,10 @@ export function TaskDetailForm({
               setEditingDescription(false);
             }
           }}
-          rows={12}
+          rows={Math.max(3, description.split("\n").length + 1)}
           aria-label="Description"
           placeholder="Add a description…"
-          className="min-h-[10.5rem] w-full resize-y border-0 bg-transparent p-0 text-sm leading-relaxed outline-none ring-0 placeholder:text-muted focus-visible:outline-none focus-visible:ring-0"
+          className="w-full resize-y rounded-lg border border-transparent bg-muted/15 px-3 py-2.5 text-sm leading-relaxed outline-none ring-0 placeholder:text-muted focus-visible:border-border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         />
       ) : canWrite ? (
         <div
@@ -247,7 +247,7 @@ export function TaskDetailForm({
               setEditingDescription(true);
             }
           }}
-          className="min-h-[10.5rem] cursor-text outline-none focus-visible:outline-none"
+          className="cursor-text rounded-lg bg-muted/15 px-3 py-2.5 outline-none transition hover:bg-muted/25 focus-visible:ring-2 focus-visible:ring-ring"
           aria-label={description.trim() ? "Edit description" : "Add description"}
         >
           {description.trim() ? (
@@ -257,7 +257,9 @@ export function TaskDetailForm({
           )}
         </div>
       ) : description.trim() ? (
-        <MarkdownContent content={description} />
+        <div className="rounded-lg bg-muted/15 px-3 py-2.5">
+          <MarkdownContent content={description} />
+        </div>
       ) : (
         <p className="text-sm text-muted">No description for this task.</p>
       )}

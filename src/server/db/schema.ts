@@ -329,6 +329,7 @@ export const userPreferences = pgTable("user_preferences", {
   notifyAssignments: boolean("notify_assignments").notNull().default(true),
   animationsEnabled: boolean("animations_enabled").notNull().default(true),
   providerTileStyles: boolean("provider_tile_styles").notNull().default(true),
+  groupRelatedTasks: boolean("group_related_tasks").notNull().default(true),
   projectsLayout: jsonb("projects_layout"),
   updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
 });
@@ -362,6 +363,23 @@ export const taskComments = pgTable(
     updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
   },
   (table) => [index("task_comments_task_idx").on(table.taskId)],
+);
+
+export const taskLinks = pgTable(
+  "task_links",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    workspaceId: uuid("workspace_id").notNull(),
+    fromTaskId: uuid("from_task_id").notNull(),
+    toTaskId: uuid("to_task_id").notNull(),
+    linkType: text("link_type").$type<"blocks" | "relates_to" | "duplicate">().notNull(),
+    createdBy: text("created_by").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("task_links_from_idx").on(table.fromTaskId),
+    index("task_links_to_idx").on(table.toTaskId),
+  ],
 );
 
 export const fakeProviderTasks = pgTable("fake_provider_tasks", {

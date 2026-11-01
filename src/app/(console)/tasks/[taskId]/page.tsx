@@ -7,9 +7,11 @@ import { ScreenLoader } from "@/components/screen-loader";
 import { OpenInProviderButton, ProviderIcon, providerLabel } from "@/components/provider-icon";
 import { TaskComments } from "@/components/task-comments";
 import { TaskDetailForm } from "@/components/task-detail-form";
+import { TaskLinks } from "@/components/task-links";
 import { getSessionUser } from "@/server/auth/session";
 import { workspaceContext } from "@/server/auth/workspace";
 import { listTaskComments } from "@/server/tasks/comments";
+import { listTaskLinks } from "@/server/tasks/links";
 import { getTask } from "@/server/tasks/service";
 
 export const instant = false;
@@ -40,11 +42,12 @@ async function TaskDetailContent({
   if (!UUID_RE.test(taskId)) notFound();
 
   const { workspaces } = await workspaceContext(user.id);
-  const [task, commentBundle] = await Promise.all([
+  const [task, commentBundle, links] = await Promise.all([
     getTask(user.id, taskId),
     listTaskComments(user.id, taskId),
+    listTaskLinks(user.id, taskId),
   ]);
-  if (!task || !commentBundle) notFound();
+  if (!task || !commentBundle || !links) notFound();
 
   const membership = workspaces.find((workspace) => workspace.id === task.workspace_id);
   const canWrite = membership ? membership.role !== "viewer" : false;
@@ -105,16 +108,26 @@ async function TaskDetailContent({
           </div>
         </div>
 
-        <aside data-tour="task-comments" className="min-w-0 rounded-lg border bg-card/40 p-4 lg:sticky lg:top-6 lg:max-h-[calc(100dvh-6rem)] lg:overflow-y-auto lg:p-5">
-          <TaskComments
-            taskId={task.id}
-            comments={commentBundle.comments}
-            source={commentBundle.source}
-            canComment={commentBundle.canComment}
-            canWrite={canWrite}
-            unavailableReason={commentBundle.unavailableReason}
-            currentUserName={user.name}
-          />
+        <aside className="min-w-0 space-y-5 rounded-lg border bg-card/40 p-4 lg:sticky lg:top-6 lg:max-h-[calc(100dvh-6rem)] lg:overflow-y-auto lg:p-5">
+          <div data-tour="task-links">
+            <TaskLinks
+              workspaceId={task.workspace_id}
+              taskId={task.id}
+              links={links}
+              canWrite={canWrite}
+            />
+          </div>
+          <div data-tour="task-comments">
+            <TaskComments
+              taskId={task.id}
+              comments={commentBundle.comments}
+              source={commentBundle.source}
+              canComment={commentBundle.canComment}
+              canWrite={canWrite}
+              unavailableReason={commentBundle.unavailableReason}
+              currentUserName={user.name}
+            />
+          </div>
         </aside>
       </div>
     </div>

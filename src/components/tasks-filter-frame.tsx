@@ -2,6 +2,7 @@
 
 import { useRouter, useSearchParams } from "next/navigation";
 import { useMemo, useTransition, type ReactNode } from "react";
+import { GroupRelatedTasksToggle } from "@/components/group-related-tasks-toggle";
 import { ResultsLoader } from "@/components/results-loader";
 import { TaskBulkActions } from "@/components/task-bulk-actions";
 import { TaskFilters, TaskViewToggle } from "@/components/task-filters";
@@ -13,12 +14,14 @@ export function TasksFilterFrame({
   heading,
   actions,
   canWrite = false,
+  groupRelatedTasks = true,
   children,
 }: {
   projects: ProjectOption[];
   heading: ReactNode;
   actions?: ReactNode;
   canWrite?: boolean;
+  groupRelatedTasks?: boolean;
   children: ReactNode;
 }) {
   const router = useRouter();
@@ -52,6 +55,9 @@ export function TasksFilterFrame({
         <div className="flex shrink-0 flex-wrap items-center justify-end gap-3 pt-1">
           <div className="flex items-center" data-tour="task-view">
             <TaskViewToggle values={values} onNavigate={onNavigate} />
+          </div>
+          <div className="flex items-center" data-tour="task-related-group">
+            <GroupRelatedTasksToggle enabled={groupRelatedTasks} />
           </div>
           <div className="flex items-center" data-tour="new-task">
             {actions}

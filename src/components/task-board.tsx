@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
-import { ExternalLink } from "lucide-react";
+import { ExternalLink, Link2 } from "lucide-react";
 import { isRedirectError } from "next/dist/client/components/redirect-error";
 import { updateTaskAction } from "@/app/actions";
 import {
@@ -122,15 +122,20 @@ function TaskCardBody({
   task,
   reserveSourceSlot = false,
   providerStyles = false,
+  related = false,
 }: {
   task: BoardTask;
   reserveSourceSlot?: boolean;
   providerStyles?: boolean;
+  related?: boolean;
 }) {
   const accent = providerStyles ? taskProviderAccent(task.provider) : null;
   return (
     <>
-      <p className={cn("font-medium", reserveSourceSlot && task.external_url && "pr-8")}>{task.title}</p>
+      <p className={cn("flex items-center gap-1.5 font-medium", reserveSourceSlot && task.external_url && "pr-8")}>
+        {related ? <Link2 className="size-3.5 shrink-0 text-primary" aria-hidden="true" /> : null}
+        <span className="min-w-0">{task.title}</span>
+      </p>
       <p className={cn("text-xs", accent ? accent.ink : "text-muted")}>{task.project_name}</p>
       <div className="mt-2 flex flex-wrap gap-1">
         <Badge tone={task.priority}>
@@ -171,11 +176,18 @@ export function TaskBoard({
   workspaceId,
   tasks,
   providerTileStyles = true,
+  relatedGroupIds,
 }: {
   workspaceId: string;
   tasks: BoardTask[];
   providerTileStyles?: boolean;
+  /** task id → group id for multi-task relationship components */
+  relatedGroupIds?: Map<string, string> | Record<string, string>;
 }) {
+  const relatedLookup =
+    relatedGroupIds instanceof Map
+      ? relatedGroupIds
+      : new Map(Object.entries(relatedGroupIds ?? {}));
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [statusOverrides, setStatusOverrides] = useState<Record<string, BoardStatus>>({});
@@ -453,6 +465,7 @@ export function TaskBoard({
                   const isEntering = Boolean(enteringIds[task.id]);
                   const isSaving = Boolean(savingIds[task.id]);
                   const accent = providerTileStyles ? taskProviderAccent(task.provider) : null;
+                  const related = relatedLookup.has(task.id);
                   return (
                     <div key={task.id} className="contents">
                       <article
@@ -472,6 +485,7 @@ export function TaskBoard({
                           isSaving && "board-card-saving",
                           isDragSource && "board-card-drag-source",
                           accent && accent.wash,
+                          related && "ring-1 ring-primary/25",
                         )}
                       >
                         {accent ? (
@@ -499,6 +513,7 @@ export function TaskBoard({
                             task={task}
                             reserveSourceSlot
                             providerStyles={providerTileStyles}
+                            related={related}
                           />
                         </Link>
                         <div className={cn("px-3 pb-3 md:hidden", accent && "pl-3.5")}>

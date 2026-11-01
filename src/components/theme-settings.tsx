@@ -3,7 +3,13 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
 import { Check, Moon, Sun } from "lucide-react";
-import { motionAction, paletteAction, providerTileStylesAction, themeAction } from "@/app/actions";
+import {
+  groupRelatedTasksAction,
+  motionAction,
+  paletteAction,
+  providerTileStylesAction,
+  themeAction,
+} from "@/app/actions";
 import { Checkbox } from "@/components/ui/checkbox";
 import { applyDocumentMotion, applyDocumentTheme } from "@/lib/apply-theme";
 import { COLOR_PALETTES, type ColorPaletteId, type ThemeMode } from "@/lib/theme";
@@ -29,21 +35,25 @@ export function ThemeSettings({
   palette,
   animationsEnabled,
   providerTileStyles,
+  groupRelatedTasks,
 }: {
   theme: ThemeMode;
   palette: ColorPaletteId;
   animationsEnabled: boolean;
   providerTileStyles: boolean;
+  groupRelatedTasks: boolean;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [draft, setDraft] = useState<{ theme: ThemeMode; palette: ColorPaletteId } | null>(null);
   const [motionDraft, setMotionDraft] = useState<boolean | null>(null);
   const [providerTilesDraft, setProviderTilesDraft] = useState<boolean | null>(null);
+  const [groupRelatedDraft, setGroupRelatedDraft] = useState<boolean | null>(null);
   const mode = draft?.theme ?? theme;
   const activePalette = draft?.palette ?? palette;
   const motionOn = motionDraft ?? animationsEnabled;
   const providerTilesOn = providerTilesDraft ?? providerTileStyles;
+  const groupRelatedOn = groupRelatedDraft ?? groupRelatedTasks;
 
   useEffect(() => {
     applyDocumentTheme(theme, palette);
@@ -101,6 +111,18 @@ export function ThemeSettings({
       await providerTileStylesAction(formData);
       router.refresh();
       setProviderTilesDraft(null);
+    });
+  }
+
+  function setGroupRelated(next: boolean) {
+    if (next === groupRelatedOn || pending) return;
+    setGroupRelatedDraft(next);
+    const formData = new FormData();
+    formData.set("groupRelatedTasks", next ? "on" : "off");
+    startTransition(async () => {
+      await groupRelatedTasksAction(formData);
+      router.refresh();
+      setGroupRelatedDraft(null);
     });
   }
 
@@ -225,21 +247,38 @@ export function ThemeSettings({
 
       <div className="mt-6">
         <h3 className="text-sm font-medium">Tasks</h3>
-        <label className="mt-3 flex cursor-pointer items-start gap-3 rounded-lg border border-border bg-background p-4">
-          <Checkbox
-            className="mt-0.5"
-            checked={!providerTilesOn}
-            disabled={pending}
-            onCheckedChange={(value) => setProviderTiles(value !== true)}
-            aria-label="Disable provider colors on task tiles"
-          />
-          <span className="min-w-0">
-            <span className="block font-medium">Disable provider colors on task tiles</span>
-            <span className="mt-0.5 block text-xs text-muted">
-              Hide source-colored rails and washes on the tasks board and list. Provider icons still show which system a task came from.
+        <div className="mt-3 space-y-3">
+          <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-border bg-background p-4">
+            <Checkbox
+              className="mt-0.5"
+              checked={!providerTilesOn}
+              disabled={pending}
+              onCheckedChange={(value) => setProviderTiles(value !== true)}
+              aria-label="Disable provider colors on task tiles"
+            />
+            <span className="min-w-0">
+              <span className="block font-medium">Disable provider colors on task tiles</span>
+              <span className="mt-0.5 block text-xs text-muted">
+                Hide source-colored rails and washes on the tasks board and list. Provider icons still show which system a task came from.
+              </span>
             </span>
-          </span>
-        </label>
+          </label>
+          <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-border bg-background p-4">
+            <Checkbox
+              className="mt-0.5"
+              checked={!groupRelatedOn}
+              disabled={pending}
+              onCheckedChange={(value) => setGroupRelated(value !== true)}
+              aria-label="Disable related-task grouping"
+            />
+            <span className="min-w-0">
+              <span className="block font-medium">Disable related-task grouping</span>
+              <span className="mt-0.5 block text-xs text-muted">
+                Show the tasks list as a flat feed instead of clustering linked tasks together. You can also toggle this from the tasks screen.
+              </span>
+            </span>
+          </label>
+        </div>
       </div>
     </section>
   );

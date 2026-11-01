@@ -40,6 +40,7 @@ async function SettingsContent() {
     notify_assignments: boolean;
     animations_enabled: boolean;
     provider_tile_styles: boolean;
+    group_related_tasks: boolean;
   }>(sql`select * from user_preferences where user_id = current_setting('app.current_user_id', true)`));
   const pref = prefs[0];
   const animationsEnabled = pref
@@ -48,6 +49,9 @@ async function SettingsContent() {
   const providerTileStyles = pref
     ? pref.provider_tile_styles !== false
     : parseMotionEnabled(cookieStore.get("atrium_provider_tiles")?.value);
+  const groupRelatedTasks = pref
+    ? pref.group_related_tasks !== false
+    : parseMotionEnabled(cookieStore.get("atrium_group_related_tasks")?.value);
   return (
     <div className="w-full space-y-8">
       <div>
@@ -61,6 +65,7 @@ async function SettingsContent() {
           palette={palette}
           animationsEnabled={animationsEnabled}
           providerTileStyles={providerTileStyles}
+          groupRelatedTasks={groupRelatedTasks}
         />
       </div>
       <div className="grid w-full gap-6 xl:grid-cols-2">

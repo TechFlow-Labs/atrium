@@ -49,6 +49,9 @@ async function OnboardingContent() {
         palette: parseColorPalette(cookieStore.get("atrium_palette")?.value),
         animationsEnabled: flags?.animationsEnabled ?? parseMotionEnabled(cookieStore.get("atrium_motion")?.value),
         providerTileStyles: flags?.providerTileStyles ?? parseMotionEnabled(cookieStore.get("atrium_provider_tiles")?.value),
+        groupRelatedTasks:
+          flags?.groupRelatedTasks
+          ?? parseMotionEnabled(cookieStore.get("atrium_group_related_tasks")?.value),
       }}
       workspace={{ id: current.id, name: current.name }}
       canAdmin={canAdmin}

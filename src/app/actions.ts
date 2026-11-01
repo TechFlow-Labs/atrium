@@ -25,6 +25,7 @@ import {
 } from "@/server/workspaces/service";
 import { archiveProject, createMilestone, createNativeProject, updateProject } from "@/server/projects/service";
 import { addTaskComment } from "@/server/tasks/comments";
+import { addTaskLink, removeTaskLink, searchTasksForLink } from "@/server/tasks/links";
 import { bulkUpdateTasks, createTask, updateTask } from "@/server/tasks/service";
 import {
   addFakeRemoteProject,
@@ -32,6 +33,8 @@ import {
   connectWithToken,
   createExternalProject,
   disconnectIntegration,
+  ensureExternalProjectForTask,
+  listRemoteProjects,
   resolveConflict,
   retryDead,
   setNativePublishing,
@@ -345,8 +348,24 @@ export async function createMilestoneAction(formData: FormData): Promise<void> {
 
 export async function createTaskAction(_state: ActionState, formData: FormData): Promise<ActionState> {
   try {
-    await createTask(await userId(), String(formData.get("workspaceId")), {
-      projectId: String(formData.get("projectId")),
+    const uid = await userId();
+    const workspaceId = String(formData.get("workspaceId"));
+    const destination = String(formData.get("destination") ?? "atrium");
+    let projectId = String(formData.get("projectId") ?? "");
+    if (destination === "provider") {
+      projectId = await ensureExternalProjectForTask(uid, workspaceId, {
+        integrationId: String(formData.get("integrationId") ?? ""),
+        providerProjectId: String(formData.get("providerProjectId") ?? ""),
+        name: String(formData.get("providerProjectName") ?? ""),
+        key: String(formData.get("providerProjectKey") ?? "") || null,
+        url: String(formData.get("providerProjectUrl") ?? "") || null,
+      });
+    }
+    if (!projectId) {
+      return { error: destination === "provider" ? "Choose a provider project" : "Choose a project" };
+    }
+    await createTask(uid, workspaceId, {
+      projectId,
       title: String(formData.get("title") ?? ""),
       description: String(formData.get("description") ?? ""),
       status: (String(formData.get("status") ?? "open") || "open") as "open",
@@ -359,6 +378,26 @@ export async function createTaskAction(_state: ActionState, formData: FormData):
     return { error: error instanceof Error ? error.message : "Could not create the task" };
   }
   redirect(String(formData.get("returnTo") ?? "/tasks"));
+}
+
+export async function listRemoteProjectsForCreateAction(
+  workspaceId: string,
+  integrationId: string,
+): Promise<{ projects: Array<{ providerId: string; name: string; key: string | null; url: string | null }> } | { error: string }> {
+  try {
+    const projects = await listRemoteProjects(await userId(), workspaceId, integrationId);
+    return {
+      projects: projects.map((project) => ({
+        providerId: project.providerId,
+        name: project.name,
+        key: project.key,
+        url: project.url,
+      })),
+    };
+  } catch (error) {
+    unstable_rethrow(error);
+    return { error: error instanceof Error ? error.message : "Could not load provider projects" };
+  }
 }
 
 export async function updateTaskAction(formData: FormData): Promise<void> {
@@ -414,6 +453,47 @@ export async function addTaskCommentAction(_state: ActionState, formData: FormDa
     return { error: error instanceof Error ? error.message : "Could not add the comment" };
   }
   redirect(String(formData.get("returnTo") ?? `/tasks/${taskId}`));
+}
+
+export async function addTaskLinkAction(_state: ActionState, formData: FormData): Promise<ActionState> {
+  const taskId = String(formData.get("taskId") ?? "");
+  try {
+    await addTaskLink(await userId(), String(formData.get("workspaceId")), {
+      fromTaskId: taskId,
+      toTaskId: String(formData.get("toTaskId") ?? ""),
+      linkType: String(formData.get("linkType") ?? ""),
+    });
+  } catch (error) {
+    unstable_rethrow(error);
+    return { error: error instanceof Error ? error.message : "Could not link the tasks" };
+  }
+  revalidatePath(`/tasks/${taskId}`);
+  const relatedId = String(formData.get("toTaskId") ?? "");
+  if (relatedId) revalidatePath(`/tasks/${relatedId}`);
+  redirect(String(formData.get("returnTo") ?? `/tasks/${taskId}`));
+}
+
+export async function removeTaskLinkAction(formData: FormData): Promise<void> {
+  const taskId = String(formData.get("taskId") ?? "");
+  const relatedTaskId = String(formData.get("relatedTaskId") ?? "");
+  await removeTaskLink(await userId(), String(formData.get("workspaceId")), String(formData.get("linkId")));
+  revalidatePath(`/tasks/${taskId}`);
+  if (relatedTaskId) revalidatePath(`/tasks/${relatedTaskId}`);
+  redirect(String(formData.get("returnTo") ?? `/tasks/${taskId}`));
+}
+
+export async function searchTasksForLinkAction(
+  workspaceId: string,
+  excludeTaskId: string,
+  query: string,
+): Promise<{ tasks: Array<{ id: string; title: string; status: string; priority: string; provider: string | null; projectName: string }> } | { error: string }> {
+  try {
+    const tasks = await searchTasksForLink(await userId(), workspaceId, { query, excludeTaskId });
+    return { tasks };
+  } catch (error) {
+    unstable_rethrow(error);
+    return { error: error instanceof Error ? error.message : "Could not search tasks" };
+  }
 }
 
 export async function bulkTaskAction(formData: FormData): Promise<void> {
@@ -618,6 +698,31 @@ export async function providerTileStylesAction(formData: FormData): Promise<void
     `);
   });
   revalidatePath("/", "layout");
+}
+
+export async function groupRelatedTasksAction(formData: FormData): Promise<void> {
+  const user = await userId();
+  const enabled = parseMotionEnabled(String(formData.get("groupRelatedTasks") ?? "on"));
+  (await cookies()).set("atrium_group_related_tasks", enabled ? "on" : "off", { path: "/", sameSite: "lax" });
+  await withUser(user, async (tx) => {
+    await tx.execute(sql`
+      insert into user_preferences (user_id, timezone, theme, palette, notify_sync_errors, notify_assignments, group_related_tasks)
+      values (
+        current_setting('app.current_user_id', true),
+        'UTC',
+        'light',
+        'grove',
+        true,
+        true,
+        ${enabled}
+      )
+      on conflict (user_id) do update set
+        group_related_tasks = excluded.group_related_tasks,
+        updated_at = now()
+    `);
+  });
+  revalidatePath("/tasks");
+  revalidatePath("/settings");
 }
 
 export async function themeAction(formData: FormData): Promise<void> {
