@@ -6,12 +6,14 @@ import { withUser, type Tx } from "../db/client";
 import { textArray } from "../db/sql";
 import { sha256 } from "../crypto/secrets";
 import { integrationView, openCredential, sealCredential } from "./credentials";
+import { giteaOAuthSiteUrl } from "./gitea-site";
 import { resolveOAuthApp } from "./oauth-apps";
 import { seedFakeProject } from "./fake";
 import { normalizeLinearToken } from "./linear";
 import { getAdapter, OAUTH_SCOPES } from "./registry";
 import { validateObsidianConnection } from "./obsidian";
 import { validateSlackConnection } from "./slack";
+import { ensureFreshCredentials } from "./token-refresh";
 import type {
   FieldMappings,
   IntegrationProviderId,
@@ -96,9 +98,17 @@ async function adapterContext(tx: Tx, integrationId: string) {
   if (isNoteProvider(row.provider)) {
     throw new Error("Obsidian is a notes connection. Open Notes instead of linking projects.");
   }
-  const credentials = openCredential(row.credential_ciphertext);
-  if (!credentials) throw new Error("This integration is disconnected");
-  const adapter = getAdapter(row.provider);
+  const provider = row.provider;
+  if (!isTaskProvider(provider)) {
+    throw new Error("This integration cannot sync tasks");
+  }
+  const credentials = await ensureFreshCredentials(tx, {
+    integrationId: row.id,
+    workspaceId: row.workspace_id,
+    provider,
+    ciphertext: row.credential_ciphertext,
+  });
+  const adapter = getAdapter(provider);
   return {
     row,
     adapter,
@@ -134,6 +144,9 @@ export async function connectWithToken(
     throw new Error(
       "Enter the HTTPS vault bridge URL (for a vault on another VPS), or a LiveSync filesystem path on this host",
     );
+  }
+  if (provider === "gitea" && !input.siteUrl?.trim()) {
+    throw new Error("Enter your Gitea site URL, for example https://gitea.example.com");
   }
   const displayName = input.displayName.trim();
   if (displayName.length < 2) throw new Error("Name the connection so you can recognize it later");
@@ -337,15 +350,17 @@ export async function testIntegration(userId: string, workspaceId: string, integ
       if (!row || row.status === "revoked" || !row.credential_ciphertext) {
         throw new Error("This integration is disconnected");
       }
-      const credentials = openCredential(row.credential_ciphertext);
-      if (!credentials) throw new Error("This integration is disconnected");
-
       let result: { externalAccountId: string; accountLabel: string };
       if (isChatProvider(row.provider)) {
+        const credentials = openCredential(row.credential_ciphertext);
+        if (!credentials) throw new Error("This integration is disconnected");
         result = await validateSlackConnection(credentials.accessToken);
       } else if (isNoteProvider(row.provider)) {
+        const credentials = openCredential(row.credential_ciphertext);
+        if (!credentials) throw new Error("This integration is disconnected");
         result = await validateObsidianConnection(credentials.accessToken, credentials.siteUrl);
       } else {
+        // adapterContext refreshes OAuth access tokens before validating.
         const { adapter, ctx } = await adapterContext(tx, integrationId);
         result = await adapter.validateConnection(ctx);
       }
@@ -626,16 +641,6 @@ export async function beginOAuth(userId: string, workspaceId: string, provider: 
     return url.toString();
   }
   throw new Error(`OAuth is not supported for ${provider}`);
-}
-
-function giteaOAuthSiteUrl(siteUrl: string | null): string {
-  const raw = (siteUrl ?? "https://gitea.com").trim().replace(/\/$/, "");
-  try {
-    const url = new URL(raw.includes("://") ? raw : `https://${raw}`);
-    return url.origin;
-  } catch {
-    throw new Error("GITEA_SITE_URL is invalid");
-  }
 }
 
 export async function completeOAuth(userId: string, provider: Exclude<ProviderId, "fake">, code: string, state: string) {

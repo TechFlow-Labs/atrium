@@ -1,6 +1,6 @@
 import { sql } from "drizzle-orm";
-import { openCredential } from "../integrations/credentials";
 import { getAdapter } from "../integrations/registry";
+import { ensureFreshCredentials } from "../integrations/token-refresh";
 import { ProviderError, type FieldMappings, type ProviderId, type RemoteTask } from "../integrations/types";
 import { logError } from "../log";
 import { withWorker, type Tx } from "../db/client";
@@ -353,12 +353,13 @@ export async function processOutboxRow(row: ClaimedOutbox): Promise<void> {
     const remote = await withWorker(async (tx) => {
       const integrations = await tx.execute<{
         id: string;
+        workspace_id: string;
         provider: ProviderId;
         status: string;
         credential_ciphertext: string | null;
         field_mappings: FieldMappings;
       }>(sql`
-        select i.id, i.provider, i.status, i.credential_ciphertext, c.field_mappings
+        select i.id, i.workspace_id, i.provider, i.status, i.credential_ciphertext, c.field_mappings
         from integrations i
         join project_connections c on c.integration_id = i.id and c.id = ${payload.connectionId}::uuid
         where i.id = ${row.integration_id}::uuid
@@ -367,8 +368,12 @@ export async function processOutboxRow(row: ClaimedOutbox): Promise<void> {
       if (!integration || integration.status !== "connected" || !integration.credential_ciphertext) {
         throw new ProviderError("Integration is disconnected", "unauthorized", false);
       }
-      const credentials = openCredential(integration.credential_ciphertext);
-      if (!credentials) throw new ProviderError("Integration is disconnected", "unauthorized", false);
+      const credentials = await ensureFreshCredentials(tx, {
+        integrationId: integration.id,
+        workspaceId: integration.workspace_id,
+        provider: integration.provider,
+        ciphertext: integration.credential_ciphertext,
+      });
       const adapter = getAdapter(integration.provider);
       const ctx = {
         tx,
@@ -453,7 +458,14 @@ export async function reconcileConnection(connectionId: string): Promise<void> {
     return rows[0] ?? null;
   });
   if (!meta || meta.status !== "connected" || !meta.credential_ciphertext) return;
-  const credentials = openCredential(meta.credential_ciphertext);
+  const credentials = await withWorker(async (tx) =>
+    ensureFreshCredentials(tx, {
+      integrationId: meta.integration_id,
+      workspaceId: meta.workspace_id,
+      provider: meta.provider,
+      ciphertext: meta.credential_ciphertext,
+    }),
+  ).catch(() => null);
   if (!credentials) return;
   const adapter = getAdapter(meta.provider);
   const startedAtNull = !meta.cursor;
@@ -587,10 +599,11 @@ export async function processWebhookDelivery(deliveryId: string): Promise<void> 
   const integration = await withWorker(async (tx) => {
     const rows = await tx.execute<{
       provider: ProviderId;
+      workspace_id: string;
       credential_ciphertext: string | null;
       field_mappings: FieldMappings | null;
     }>(sql`
-      select i.provider, i.credential_ciphertext, c.field_mappings
+      select i.provider, i.workspace_id, i.credential_ciphertext, c.field_mappings
       from integrations i
       left join project_connections c on c.integration_id = i.id
       where i.id = ${delivery.integration_id}::uuid
@@ -599,8 +612,14 @@ export async function processWebhookDelivery(deliveryId: string): Promise<void> 
     return rows[0] ?? null;
   });
   if (!integration?.credential_ciphertext) throw new ProviderError("Integration is disconnected", "unauthorized", false);
-  const credentials = openCredential(integration.credential_ciphertext);
-  if (!credentials) throw new ProviderError("Integration is disconnected", "unauthorized", false);
+  const credentials = await withWorker(async (tx) =>
+    ensureFreshCredentials(tx, {
+      integrationId: delivery.integration_id!,
+      workspaceId: integration.workspace_id,
+      provider: integration.provider,
+      ciphertext: integration.credential_ciphertext,
+    }),
+  );
   const adapter = getAdapter(delivery.provider);
   const stored = delivery.payload as { body?: unknown; event?: string | null };
   const rawBody = JSON.stringify(stored?.body ?? delivery.payload);

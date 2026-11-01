@@ -2,9 +2,9 @@ import { sql } from "drizzle-orm";
 import { writeAudit } from "../audit";
 import { requireAction } from "../authz/membership";
 import { withUser, type Tx } from "../db/client";
-import { openCredential } from "../integrations/credentials";
 import { getAdapter } from "../integrations/registry";
-import type { FieldMappings, ProviderId, RemoteComment } from "../integrations/types";
+import { ensureFreshCredentials, isUnauthorizedProviderError } from "../integrations/token-refresh";
+import type { FieldMappings, ProviderId, RemoteComment, StoredCredential } from "../integrations/types";
 
 export type TaskCommentView = {
   id: string;
@@ -154,7 +154,8 @@ export async function listTaskComments(userId: string, taskId: string): Promise<
     }
 
     const adapter = getAdapter(ctx.provider);
-    if (!adapter.getCapabilities().comments || !adapter.listComments) {
+    const listComments = adapter.listComments;
+    if (!adapter.getCapabilities().comments || !listComments) {
       return {
         comments: [],
         source: ctx.provider,
@@ -163,29 +164,56 @@ export async function listTaskComments(userId: string, taskId: string): Promise<
       };
     }
 
-    const credentials = openCredential(ctx.credentialCiphertext);
-    if (!credentials) {
+    let credentials: StoredCredential;
+    try {
+      credentials = await ensureFreshCredentials(tx, {
+        integrationId: ctx.integrationId,
+        workspaceId: ctx.workspaceId,
+        provider: ctx.provider,
+        ciphertext: ctx.credentialCiphertext,
+      });
+    } catch (error) {
       return {
         comments: [],
         source: ctx.provider,
         canComment: false,
-        unavailableReason: "Reconnect this integration to load and post comments.",
+        unavailableReason:
+          error instanceof Error ? error.message : "Reconnect this integration to load and post comments.",
       };
     }
 
-    try {
-      const page = await adapter.listComments(
+    const load = async (creds: StoredCredential) =>
+      listComments(
         {
           tx,
-          integrationId: ctx.integrationId,
-          credentials,
+          integrationId: ctx.integrationId!,
+          credentials: creds,
           mappings: ctx.fieldMappings ?? adapter.defaultMappings(),
         },
         {
-          providerTaskId: ctx.providerTaskId,
-          providerProjectId: ctx.providerProjectId,
+          providerTaskId: ctx.providerTaskId!,
+          providerProjectId: ctx.providerProjectId!,
         },
       );
+
+    try {
+      let page;
+      try {
+        page = await load(credentials);
+      } catch (error) {
+        if (!isUnauthorizedProviderError(error) || !credentials.refreshToken) throw error;
+        const refreshed = await ensureFreshCredentials(
+          tx,
+          {
+            integrationId: ctx.integrationId,
+            workspaceId: ctx.workspaceId,
+            provider: ctx.provider,
+            ciphertext: ctx.credentialCiphertext,
+          },
+          true,
+        );
+        page = await load(refreshed);
+      }
       return {
         comments: page.items.map((comment) => toView(comment, ctx.provider!)),
         source: ctx.provider,
@@ -245,22 +273,53 @@ export async function addTaskComment(userId: string, taskId: string, body: strin
     if (!adapter.getCapabilities().comments || !adapter.createComment) {
       throw new Error(`${ctx.provider} comments are not supported yet`);
     }
-    const credentials = openCredential(ctx.credentialCiphertext);
-    if (!credentials) throw new Error("Reconnect this integration before commenting");
+    const credentials = await ensureFreshCredentials(tx, {
+      integrationId: ctx.integrationId,
+      workspaceId: ctx.workspaceId,
+      provider: ctx.provider,
+      ciphertext: ctx.credentialCiphertext,
+    });
 
-    await adapter.createComment(
-      {
+    try {
+      await adapter.createComment(
+        {
+          tx,
+          integrationId: ctx.integrationId,
+          credentials,
+          mappings: ctx.fieldMappings ?? adapter.defaultMappings(),
+        },
+        {
+          providerTaskId: ctx.providerTaskId,
+          providerProjectId: ctx.providerProjectId,
+          body: text,
+        },
+      );
+    } catch (error) {
+      if (!isUnauthorizedProviderError(error) || !credentials.refreshToken) throw error;
+      const refreshed = await ensureFreshCredentials(
         tx,
-        integrationId: ctx.integrationId,
-        credentials,
-        mappings: ctx.fieldMappings ?? adapter.defaultMappings(),
-      },
-      {
-        providerTaskId: ctx.providerTaskId,
-        providerProjectId: ctx.providerProjectId,
-        body: text,
-      },
-    );
+        {
+          integrationId: ctx.integrationId,
+          workspaceId: ctx.workspaceId,
+          provider: ctx.provider,
+          ciphertext: ctx.credentialCiphertext,
+        },
+        true,
+      );
+      await adapter.createComment(
+        {
+          tx,
+          integrationId: ctx.integrationId,
+          credentials: refreshed,
+          mappings: ctx.fieldMappings ?? adapter.defaultMappings(),
+        },
+        {
+          providerTaskId: ctx.providerTaskId,
+          providerProjectId: ctx.providerProjectId,
+          body: text,
+        },
+      );
+    }
 
     await writeAudit(tx, {
       workspaceId: ctx.workspaceId,

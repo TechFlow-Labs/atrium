@@ -1,4 +1,5 @@
 import { verifyHmacSha256 } from "../crypto/secrets";
+import { giteaOAuthSiteUrl } from "./gitea-site";
 import { nextLink, providerFetch } from "./http";
 import { mapPriorityToProvider, mapStatusFromProvider } from "./mappings";
 import {
@@ -66,13 +67,16 @@ function defaultMappings(): FieldMappings {
 }
 
 function baseUrl(siteUrl?: string | null): string {
-  const raw = (siteUrl ?? "https://gitea.com").trim().replace(/\/$/, "");
   try {
-    const url = new URL(raw.includes("://") ? raw : `https://${raw}`);
-    return url.origin;
+    return giteaOAuthSiteUrl(siteUrl);
   } catch {
     throw new ProviderError("Gitea site URL is invalid", "validation", false);
   }
+}
+
+/** OAuth access tokens are JWTs and expect Bearer; personal access tokens use the historical `token` prefix. */
+function authorizationHeader(token: string): string {
+  return token.includes(".") ? `Bearer ${token}` : `token ${token}`;
 }
 
 function repo(projectId: string): string {
@@ -115,14 +119,15 @@ async function gt<T>(
   siteUrl: string | undefined,
   init: RequestInit = {},
 ): Promise<{ data: T; response: Response }> {
+  const headers: Record<string, string> = {
+    authorization: authorizationHeader(token),
+    accept: "application/json",
+    ...(init.headers as Record<string, string> | undefined),
+  };
+  if (init.body) headers["content-type"] = "application/json";
   const response = await providerFetch(`${baseUrl(siteUrl)}${path}`, {
     ...init,
-    headers: {
-      authorization: `token ${token}`,
-      accept: "application/json",
-      "content-type": "application/json",
-      ...(init.headers ?? {}),
-    },
+    headers,
   });
   if (response.status === 204) return { data: undefined as T, response };
   const data = (await response.json()) as T;

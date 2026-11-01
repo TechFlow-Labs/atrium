@@ -60,7 +60,14 @@ export async function providerFetch(url: string, init: RequestInit = {}, redirec
     throw new ProviderError("Provider rate limit reached", "rate_limited", true, 429, retryAfterMs(response));
   }
   if (response.status === 401 || response.status === 403) {
-    throw new ProviderError("Provider rejected the credentials", "unauthorized", false, response.status);
+    const detail = await readError(response).catch(() => "");
+    const suffix = detail.trim() ? `: ${detail.trim().slice(0, 180)}` : "";
+    throw new ProviderError(
+      `Provider rejected the credentials${suffix}`,
+      "unauthorized",
+      false,
+      response.status,
+    );
   }
   if (response.status === 404) {
     throw new ProviderError("Provider record was not found", "not_found", false, 404);

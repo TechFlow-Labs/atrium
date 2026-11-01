@@ -1,11 +1,16 @@
 "use client";
 
+import { Children, isValidElement, type ReactNode } from "react";
 import type { Components } from "react-markdown";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Checkbox } from "@/components/ui/checkbox";
 import { prepareMarkdownTaskListsForRender } from "@/lib/markdown-checkboxes";
 import { cn } from "@/lib/utils";
+
+function isCheckboxNode(node: ReactNode): boolean {
+  return isValidElement(node) && (node.type === Checkbox || (node.props as { type?: string }).type === "checkbox");
+}
 
 export function MarkdownContent({
   content,
@@ -48,14 +53,20 @@ export function MarkdownContent({
     ),
     li: ({ className: itemClassName, children }) => {
       const isTask = itemClassName?.includes("task-list-item");
+      if (!isTask) {
+        return <li className={itemClassName}>{children}</li>;
+      }
+
+      // Flex on the <li> turns every text/`code` sibling into its own flex item and
+      // scatters the line. Keep the checkbox as the only flex sibling of a text wrap.
+      const nodes = Children.toArray(children);
+      const checkbox = nodes.find(isCheckboxNode);
+      const rest = nodes.filter((node) => !isCheckboxNode(node));
+
       return (
-        <li
-          className={cn(
-            itemClassName,
-            isTask && "flex list-none items-start gap-2.5 pl-0 marker:content-none",
-          )}
-        >
-          {children}
+        <li className={cn(itemClassName, "flex list-none items-start gap-2.5 pl-0 marker:content-none")}>
+          {checkbox}
+          <div className="min-w-0 flex-1 [&>p]:my-0">{rest}</div>
         </li>
       );
     },
@@ -72,7 +83,7 @@ export function MarkdownContent({
           checked={isChecked}
           disabled={!interactive}
           aria-label={isChecked ? "Completed subtask" : "Open subtask"}
-          className="mt-0.5"
+          className="mt-0.5 shrink-0"
           onClick={(event) => {
             event.stopPropagation();
           }}
