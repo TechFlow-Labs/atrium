@@ -7,6 +7,7 @@ import { updateTaskDetailAction } from "@/app/actions";
 import { MarkdownContent } from "@/components/markdown-content";
 import { PriorityIcon, StatusIcon, SyncStateIcon, syncStateLabel } from "@/components/task-meta-icons";
 import { MenuSelect } from "@/components/ui/menu-select";
+import { toggleMarkdownCheckboxAt } from "@/lib/markdown-checkboxes";
 import { cn, formatWhen } from "@/lib/utils";
 
 function dueInputValue(dueAt: Date | string | null): string {
@@ -118,6 +119,15 @@ export function TaskDetailForm({
     if (description === descriptionRef.current) return;
     descriptionRef.current = description;
     saveField("description", description);
+  }
+
+  function toggleDescriptionCheckbox(index: number, checked: boolean) {
+    if (!canWrite) return;
+    const next = toggleMarkdownCheckboxAt(description, index, checked);
+    if (next === description) return;
+    setDescription(next);
+    descriptionRef.current = next;
+    saveField("description", next);
   }
 
   return (
@@ -251,7 +261,7 @@ export function TaskDetailForm({
           aria-label={description.trim() ? "Edit description" : "Add description"}
         >
           {description.trim() ? (
-            <MarkdownContent content={description} />
+            <MarkdownContent content={description} onToggleCheckbox={toggleDescriptionCheckbox} />
           ) : (
             <p className="text-sm text-muted">Add a description…</p>
           )}

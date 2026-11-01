@@ -1,13 +1,96 @@
+"use client";
+
+import type { Components } from "react-markdown";
 import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import { Checkbox } from "@/components/ui/checkbox";
+import { prepareMarkdownTaskListsForRender } from "@/lib/markdown-checkboxes";
 import { cn } from "@/lib/utils";
 
 export function MarkdownContent({
   content,
   className,
+  onToggleCheckbox,
 }: {
   content: string;
   className?: string;
+  /** When set, task-list checkboxes are interactive and call back with their index. */
+  onToggleCheckbox?: (index: number, checked: boolean) => void;
 }) {
+  let checkboxIndex = 0;
+  const rendered = prepareMarkdownTaskListsForRender(content);
+
+  const components: Components = {
+    a: ({ href, children }) => (
+      <a href={href} target="_blank" rel="noreferrer">
+        {children}
+      </a>
+    ),
+    ul: ({ className: listClassName, children }) => (
+      <ul
+        className={cn(
+          listClassName,
+          listClassName?.includes("contains-task-list") && "list-none space-y-1.5 pl-0",
+        )}
+      >
+        {children}
+      </ul>
+    ),
+    ol: ({ className: listClassName, children }) => (
+      <ol
+        className={cn(
+          listClassName,
+          listClassName?.includes("contains-task-list") && "list-none space-y-1.5 pl-0",
+        )}
+      >
+        {children}
+      </ol>
+    ),
+    li: ({ className: itemClassName, children }) => {
+      const isTask = itemClassName?.includes("task-list-item");
+      return (
+        <li
+          className={cn(
+            itemClassName,
+            isTask && "flex list-none items-start gap-2.5 pl-0 marker:content-none",
+          )}
+        >
+          {children}
+        </li>
+      );
+    },
+    input: ({ type, checked, disabled, ...props }) => {
+      if (type !== "checkbox") {
+        return <input type={type} checked={checked} disabled={disabled} {...props} />;
+      }
+      const index = checkboxIndex++;
+      const isChecked = Boolean(checked);
+      const interactive = Boolean(onToggleCheckbox);
+
+      return (
+        <Checkbox
+          checked={isChecked}
+          disabled={!interactive}
+          aria-label={isChecked ? "Completed subtask" : "Open subtask"}
+          className="mt-0.5"
+          onClick={(event) => {
+            event.stopPropagation();
+          }}
+          onPointerDown={(event) => {
+            event.stopPropagation();
+          }}
+          onKeyDown={(event) => {
+            event.stopPropagation();
+          }}
+          onCheckedChange={(value) => {
+            if (!interactive) return;
+            onToggleCheckbox?.(index, value === true);
+          }}
+        />
+      );
+    },
+  };
+
   return (
     <div
       className={cn(
@@ -31,16 +114,8 @@ export function MarkdownContent({
         className,
       )}
     >
-      <ReactMarkdown
-        components={{
-          a: ({ href, children }) => (
-            <a href={href} target="_blank" rel="noreferrer">
-              {children}
-            </a>
-          ),
-        }}
-      >
-        {content}
+      <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>
+        {rendered}
       </ReactMarkdown>
     </div>
   );
