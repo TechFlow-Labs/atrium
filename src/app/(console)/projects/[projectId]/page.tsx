@@ -14,6 +14,7 @@ import { ScreenLoader } from "@/components/screen-loader";
 import { connection } from "next/server";
 import { notFound, redirect } from "next/navigation";
 import { archiveProjectAction, createMilestoneAction, createTaskAction, mappingAction, publishAction, updateProjectAction } from "@/app/actions";
+import { ProjectDeleteDialog } from "@/components/project-delete-dialog";
 import { OpenInProviderButton, ProviderIcon } from "@/components/provider-icon";
 import {
   buildProjectDashboardStats,
@@ -120,12 +121,23 @@ async function ProjectContent({ params }: { params: Promise<{ projectId: string 
             />
           ) : null}
           {canAdmin ? (
-            <form action={archiveProjectAction}>
-              <input type="hidden" name="workspaceId" value={current.id} />
-              <input type="hidden" name="projectId" value={project.id} />
-              <input type="hidden" name="archived" value={project.status === "active" ? "true" : "false"} />
-              <Button variant="outline" type="submit">{project.status === "active" ? "Archive" : "Restore"}</Button>
-            </form>
+            <>
+              <form action={archiveProjectAction}>
+                <input type="hidden" name="workspaceId" value={current.id} />
+                <input type="hidden" name="projectId" value={project.id} />
+                <input type="hidden" name="archived" value={project.status === "active" ? "true" : "false"} />
+                <Button variant="outline" type="submit">{project.status === "active" ? "Archive" : "Restore"}</Button>
+              </form>
+              <ProjectDeleteDialog
+                workspaceId={current.id}
+                projectId={project.id}
+                projectName={projectDisplayName(project)}
+                ownershipMode={project.ownership_mode}
+                triggerVariant="outline"
+                triggerSize="default"
+                triggerLabel="Delete"
+              />
+            </>
           ) : null}
         </div>
       </div>

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ProjectDeleteDialog } from "@/components/project-delete-dialog";
 import { ProjectNicknameDialog } from "@/components/project-nickname-dialog";
 import {
   OpenInProviderButton,
@@ -68,8 +69,14 @@ export function ProjectCard({
           </div>
           <div className="flex shrink-0 items-start gap-1">
             {canWrite ? (
-              <span className="pointer-events-auto relative z-10">
+              <span className="pointer-events-auto relative z-10 flex items-start gap-0.5">
                 <ProjectNicknameDialog workspaceId={workspaceId} project={project} />
+                <ProjectDeleteDialog
+                  workspaceId={workspaceId}
+                  projectId={project.id}
+                  projectName={title}
+                  ownershipMode={project.ownership_mode}
+                />
               </span>
             ) : null}
             <div className="pointer-events-none">

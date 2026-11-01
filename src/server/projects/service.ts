@@ -329,6 +329,34 @@ export async function archiveProject(userId: string, workspaceId: string, projec
   });
 }
 
+/** Permanently remove a project from Atrium (tasks cascade). Provider projects stay. */
+export async function deleteProject(userId: string, workspaceId: string, projectId: string): Promise<void> {
+  await withUser(userId, async (tx) => {
+    await requireAction(tx, workspaceId, "project.delete");
+    const existing = await tx.execute<{
+      id: string;
+      name: string;
+      ownership_mode: "native" | "external" | "hybrid";
+    }>(sql`
+      select id, name, ownership_mode
+      from projects
+      where id = ${projectId}::uuid and workspace_id = ${workspaceId}::uuid
+    `);
+    const project = existing[0];
+    if (!project) throw new Error("Project not found");
+
+    await writeAudit(tx, {
+      workspaceId,
+      action: "project.deleted",
+      entityType: "project",
+      entityId: projectId,
+      metadata: { name: project.name, ownership: project.ownership_mode },
+    });
+
+    await tx.execute(sql`select delete_project(${projectId}::uuid)`);
+  });
+}
+
 export async function listMilestones(userId: string, workspaceId: string, projectId: string) {
   return withUser(userId, async (tx) => {
     await requireAction(tx, workspaceId, "task.read");

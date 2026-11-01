@@ -28,6 +28,7 @@ import {
   archiveProject,
   createMilestone,
   createNativeProject,
+  deleteProject,
   listProjects,
   updateProject,
 } from "@/server/projects/service";
@@ -342,6 +343,24 @@ export async function archiveProjectAction(formData: FormData): Promise<void> {
     String(formData.get("projectId")),
     formData.get("archived") === "true",
   );
+  redirect("/projects");
+}
+
+export async function deleteProjectAction(
+  _state: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const workspaceId = String(formData.get("workspaceId") ?? "");
+  const projectId = String(formData.get("projectId") ?? "");
+  try {
+    await deleteProject(await userId(), workspaceId, projectId);
+    revalidatePath("/projects");
+    revalidatePath("/home");
+    revalidatePath("/tasks");
+  } catch (error) {
+    unstable_rethrow(error);
+    return { error: error instanceof Error ? error.message : "Could not delete the project" };
+  }
   redirect("/projects");
 }
 
