@@ -1,8 +1,9 @@
 "use client";
 
-import { useTransition } from "react";
-import { Check, ChevronsUpDown } from "lucide-react";
+import { useState, useTransition } from "react";
+import { Check, ChevronsUpDown, Plus } from "lucide-react";
 import { switchWorkspaceAction } from "@/app/actions";
+import { CreateWorkspaceForm } from "@/components/create-workspace-form";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -34,6 +35,7 @@ export function WorkspaceSwitch({
   contexts?: WorkspaceContextDef[];
 }) {
   const [pending, startTransition] = useTransition();
+  const [createOpen, setCreateOpen] = useState(false);
   const current = workspaces.find((workspace) => workspace.id === currentId) ?? workspaces[0];
   if (!current) return null;
 
@@ -49,44 +51,70 @@ export function WorkspaceSwitch({
   }
 
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger
-        id="workspace-switch"
-        disabled={pending}
-        className={cn(
-          "inline-flex h-9 max-w-[min(100vw-12rem,20rem)] items-center gap-2 rounded-md border bg-card px-2.5 text-left text-sm outline-none",
-          "hover:bg-accent/60 focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60",
-        )}
-        aria-label={`Workspace: ${current.name}`}
-      >
-        <span aria-hidden="true" className="shrink-0 text-base leading-none">
-          {workspaceIconOrFallback(
-            current.icon,
-            current.kind,
-            contextIcon(contexts, current.kind),
+    <>
+      <DropdownMenu>
+        <DropdownMenuTrigger
+          id="workspace-switch"
+          disabled={pending}
+          className={cn(
+            "inline-flex h-9 max-w-[min(100vw-12rem,20rem)] items-center gap-2 rounded-md border bg-card px-2.5 text-left text-sm outline-none",
+            "hover:bg-accent/60 focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60",
           )}
-        </span>
-        <span className="min-w-0 flex-1 truncate font-medium">{current.name}</span>
-        <ChevronsUpDown className="size-3.5 shrink-0 text-muted" aria-hidden="true" />
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="w-[min(100vw-2rem,22rem)]">
-        {groups.map((group, index) => (
-          <div key={group.slug}>
-            {index > 0 ? <DropdownMenuSeparator /> : null}
-            <DropdownMenuLabel>{group.label}</DropdownMenuLabel>
-            {group.workspaces.map((workspace) => (
-              <WorkspaceMenuItem
-                key={workspace.id}
-                workspace={workspace}
-                contexts={contexts}
-                selected={workspace.id === currentId}
-                onSelect={selectWorkspace}
-              />
-            ))}
-          </div>
-        ))}
-      </DropdownMenuContent>
-    </DropdownMenu>
+          aria-label={`Workspace: ${current.name}`}
+        >
+          <span aria-hidden="true" className="shrink-0 text-base leading-none">
+            {workspaceIconOrFallback(
+              current.icon,
+              current.kind,
+              contextIcon(contexts, current.kind),
+            )}
+          </span>
+          <span className="min-w-0 flex-1 truncate font-medium">{current.name}</span>
+          <ChevronsUpDown className="size-3.5 shrink-0 text-muted" aria-hidden="true" />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start" className="w-[min(100vw-2rem,22rem)]">
+          {groups.map((group, index) => (
+            <div key={group.slug}>
+              {index > 0 ? <DropdownMenuSeparator /> : null}
+              <DropdownMenuLabel>{group.label}</DropdownMenuLabel>
+              {group.workspaces.map((workspace) => (
+                <WorkspaceMenuItem
+                  key={workspace.id}
+                  workspace={workspace}
+                  contexts={contexts}
+                  selected={workspace.id === currentId}
+                  onSelect={selectWorkspace}
+                />
+              ))}
+            </div>
+          ))}
+          <DropdownMenuSeparator />
+          <DropdownMenuItem
+            onSelect={(event) => {
+              event.preventDefault();
+              setCreateOpen(true);
+            }}
+          >
+            <span
+              aria-hidden="true"
+              className="inline-flex size-8 shrink-0 items-center justify-center rounded-md border bg-background"
+            >
+              <Plus className="size-4" />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block font-medium">Add workspace</span>
+              <span className="block text-xs text-muted">Create a new workspace</span>
+            </span>
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+      <CreateWorkspaceForm
+        contexts={contexts}
+        open={createOpen}
+        onOpenChange={setCreateOpen}
+        trigger={null}
+      />
+    </>
   );
 }
 
