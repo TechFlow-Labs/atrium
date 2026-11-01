@@ -3,9 +3,16 @@
 import { useState } from "react";
 import Link from "next/link";
 import { ChevronRight } from "lucide-react";
-import { connectTokenAction, disconnectAction, oauthStartAction, type ActionState } from "@/app/actions";
+import {
+  connectTokenAction,
+  disconnectAction,
+  oauthStartAction,
+  shareIntegrationAction,
+  type ActionState,
+} from "@/app/actions";
 import { OAuthSetupForm } from "@/components/oauth-setup-form";
 import { IntegrationGuide } from "@/components/integration-guide";
+import { ShareToWorkspaceDialog } from "@/components/share-to-workspace-dialog";
 import { isOAuthProvider } from "@/lib/oauth-providers";
 import { ConnectForm } from "@/components/connect-form";
 import { ProviderIcon, providerLabel } from "@/components/provider-icon";
@@ -116,8 +123,17 @@ export function IntegrationsOnboarding({
                     </div>
                     <ChevronRight className="ml-auto size-4 shrink-0 text-muted" aria-hidden="true" />
                   </Link>
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     <Badge tone={integration.status}>{integration.status}</Badge>
+                    {canAdmin && integration.status === "connected" && integration.hasCredential ? (
+                      <ShareToWorkspaceDialog
+                        workspaceId={workspaceId}
+                        title={`Share ${integration.display_name}`}
+                        description="Copies this connection into another workspace you administer. Linked projects and sync history stay here."
+                        action={shareIntegrationAction}
+                        hiddenFields={{ integrationId: integration.id }}
+                      />
+                    ) : null}
                     {canAdmin ? (
                       <form action={disconnectAction}>
                         <input type="hidden" name="workspaceId" value={workspaceId} />

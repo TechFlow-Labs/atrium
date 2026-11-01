@@ -42,10 +42,12 @@ import {
   createExternalProject,
   disconnectIntegration,
   ensureExternalProjectForTask,
+  listIntegrationShareTargets,
   listRemoteProjects,
   resolveConflict,
   retryDead,
   setNativePublishing,
+  shareIntegrationToWorkspace,
   testIntegration,
   updateFieldMappings,
 } from "@/server/integrations/service";
@@ -57,7 +59,11 @@ import { parseMotionEnabled } from "@/lib/apply-theme";
 import { resolveGuide } from "@/lib/screen-guides";
 import { saveProfilePreferences, setOnboardingPending } from "@/server/onboarding/service";
 import { OAUTH_PROVIDERS } from "@/lib/oauth-providers";
-import { deleteOAuthApp, saveOAuthApp } from "@/server/integrations/oauth-apps";
+import {
+  deleteOAuthApp,
+  saveOAuthApp,
+  shareOAuthAppToWorkspace,
+} from "@/server/integrations/oauth-apps";
 import { markGuideSeen } from "@/server/guides/service";
 import { parseProjectsLayout, type ProjectsLayout } from "@/lib/projects-layout";
 import { parseColorPalette, parseThemeMode } from "@/lib/theme";
@@ -1003,6 +1009,62 @@ export async function deleteOAuthAppAction(formData: FormData): Promise<void> {
   });
   await deleteOAuthApp(user, parsed.workspaceId, parsed.provider);
   revalidatePath("/integrations");
+}
+
+export async function listIntegrationShareTargetsAction(
+  sourceWorkspaceId: string,
+): Promise<{ workspaces: Array<{ id: string; name: string; kind: string }> } | { error: string }> {
+  try {
+    const workspaces = await listIntegrationShareTargets(await userId(), sourceWorkspaceId);
+    return { workspaces };
+  } catch (error) {
+    unstable_rethrow(error);
+    return { error: error instanceof Error ? error.message : "Could not load workspaces" };
+  }
+}
+
+export async function shareIntegrationAction(
+  _state: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  try {
+    await shareIntegrationToWorkspace(
+      await userId(),
+      String(formData.get("workspaceId") ?? ""),
+      String(formData.get("integrationId") ?? ""),
+      String(formData.get("targetWorkspaceId") ?? ""),
+    );
+  } catch (error) {
+    unstable_rethrow(error);
+    return { error: error instanceof Error ? error.message : "Could not share the integration" };
+  }
+  revalidatePath("/integrations");
+  return { notice: "Shared to the other workspace" };
+}
+
+export async function shareOAuthAppAction(
+  _state: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const parsed = oauthAppForm.safeParse({
+    workspaceId: formData.get("workspaceId"),
+    provider: formData.get("provider"),
+  });
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Check the form" };
+  const targetWorkspaceId = String(formData.get("targetWorkspaceId") ?? "");
+  try {
+    await shareOAuthAppToWorkspace(
+      await userId(),
+      parsed.data.workspaceId,
+      targetWorkspaceId,
+      parsed.data.provider,
+    );
+  } catch (error) {
+    unstable_rethrow(error);
+    return { error: error instanceof Error ? error.message : "Could not share the OAuth app" };
+  }
+  revalidatePath("/integrations");
+  return { notice: "OAuth app shared" };
 }
 
 // Onboarding actions return instead of redirecting, so the wizard can move

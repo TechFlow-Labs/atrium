@@ -158,3 +158,70 @@ export async function deleteOAuthApp(userId: string, workspaceId: string, provid
     });
   });
 }
+
+/** Copy workspace OAuth app settings into another workspace the caller can administer. */
+export async function shareOAuthAppToWorkspace(
+  userId: string,
+  sourceWorkspaceId: string,
+  targetWorkspaceId: string,
+  provider: OAuthProvider,
+): Promise<void> {
+  if (sourceWorkspaceId === targetWorkspaceId) {
+    throw new Error("Choose a different workspace");
+  }
+  await withUser(userId, async (tx) => {
+    await requireAction(tx, sourceWorkspaceId, "integration.manage");
+    await requireAction(tx, targetWorkspaceId, "integration.manage");
+
+    const source = await tx.execute<{
+      client_id: string;
+      client_secret_ciphertext: string;
+      site_url: string | null;
+    }>(sql`
+      select client_id, client_secret_ciphertext, site_url
+      from oauth_app_settings
+      where workspace_id = ${sourceWorkspaceId}::uuid and provider = ${provider}
+    `);
+    const row = source[0];
+    if (!row) {
+      throw new Error("This workspace has no saved OAuth app for that provider");
+    }
+
+    // Re-encrypt so each workspace owns its own ciphertext blob.
+    const plaintext = decryptSecret(row.client_secret_ciphertext);
+    const ciphertext = encryptSecret(plaintext);
+
+    await tx.execute(sql`
+      insert into oauth_app_settings (workspace_id, provider, client_id, client_secret_ciphertext, site_url, updated_by)
+      values (
+        ${targetWorkspaceId}::uuid,
+        ${provider},
+        ${row.client_id},
+        ${ciphertext},
+        ${row.site_url},
+        current_setting('app.current_user_id', true)
+      )
+      on conflict (workspace_id, provider) do update set
+        client_id = excluded.client_id,
+        client_secret_ciphertext = excluded.client_secret_ciphertext,
+        site_url = excluded.site_url,
+        updated_by = excluded.updated_by,
+        updated_at = now()
+    `);
+
+    await writeAudit(tx, {
+      workspaceId: sourceWorkspaceId,
+      action: "integration.oauth_app_shared",
+      entityType: "integration_oauth_app",
+      entityId: provider,
+      metadata: { provider, toWorkspaceId: targetWorkspaceId },
+    });
+    await writeAudit(tx, {
+      workspaceId: targetWorkspaceId,
+      action: "integration.oauth_app_shared_in",
+      entityType: "integration_oauth_app",
+      entityId: provider,
+      metadata: { provider, fromWorkspaceId: sourceWorkspaceId },
+    });
+  });
+}

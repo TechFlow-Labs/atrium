@@ -219,6 +219,106 @@ export async function disconnectIntegration(userId: string, workspaceId: string,
   });
 }
 
+/** Workspaces (other than current) where the user can manage integrations. */
+export async function listIntegrationShareTargets(
+  userId: string,
+  sourceWorkspaceId: string,
+): Promise<Array<{ id: string; name: string; kind: string }>> {
+  return withUser(userId, async (tx) => {
+    await requireAction(tx, sourceWorkspaceId, "integration.manage");
+    const rows = await tx.execute<{ id: string; name: string; kind: string }>(sql`
+      select w.id, w.name, w.kind
+      from workspaces w
+      join workspace_members m on m.workspace_id = w.id
+      where m.user_id = current_setting('app.current_user_id', true)
+        and m.role in ('owner', 'admin')
+        and w.id <> ${sourceWorkspaceId}::uuid
+      order by w.kind, w.name
+    `);
+    return rows;
+  });
+}
+
+/**
+ * Clone a connected integration into another workspace.
+ * Copies credentials; does not copy linked projects or sync history.
+ */
+export async function shareIntegrationToWorkspace(
+  userId: string,
+  sourceWorkspaceId: string,
+  integrationId: string,
+  targetWorkspaceId: string,
+): Promise<string> {
+  if (sourceWorkspaceId === targetWorkspaceId) {
+    throw new Error("Choose a different workspace");
+  }
+
+  return withUser(userId, async (tx) => {
+    await requireAction(tx, sourceWorkspaceId, "integration.manage");
+    await requireAction(tx, targetWorkspaceId, "integration.manage");
+
+    const source = await tx.execute<{
+      id: string;
+      provider: IntegrationProviderId;
+      status: string;
+      display_name: string;
+      external_account_id: string | null;
+      credential_ciphertext: string | null;
+      scopes: string[] | null;
+    }>(sql`
+      select id, provider, status, display_name, external_account_id, credential_ciphertext, scopes
+      from integrations
+      where id = ${integrationId}::uuid
+        and workspace_id = ${sourceWorkspaceId}::uuid
+    `);
+    const row = source[0];
+    if (!row) throw new Error("Integration not found");
+    if (row.status === "revoked" || !row.credential_ciphertext) {
+      throw new Error("Reconnect this integration before sharing it");
+    }
+
+    const credentials = openCredential(row.credential_ciphertext);
+    if (!credentials) throw new Error("Reconnect this integration before sharing it");
+    const ciphertext = sealCredential(credentials);
+
+    const inserted = await tx.execute<{ id: string }>(sql`
+      insert into integrations (
+        workspace_id, provider, status, display_name, external_account_id, credential_ciphertext,
+        scopes, connected_by, last_validated_at
+      ) values (
+        ${targetWorkspaceId}::uuid,
+        ${row.provider},
+        'connected',
+        ${row.display_name},
+        ${row.external_account_id},
+        ${ciphertext},
+        ${textArray(row.scopes ?? [])},
+        current_setting('app.current_user_id', true),
+        now()
+      )
+      returning id
+    `);
+    const newId = inserted[0]?.id;
+    if (!newId) throw new Error("Could not share the integration");
+
+    await writeAudit(tx, {
+      workspaceId: sourceWorkspaceId,
+      action: "integration.shared",
+      entityType: "integration",
+      entityId: integrationId,
+      metadata: { toWorkspaceId: targetWorkspaceId, toIntegrationId: newId, provider: row.provider },
+    });
+    await writeAudit(tx, {
+      workspaceId: targetWorkspaceId,
+      action: "integration.shared_in",
+      entityType: "integration",
+      entityId: newId,
+      metadata: { fromWorkspaceId: sourceWorkspaceId, fromIntegrationId: integrationId, provider: row.provider },
+    });
+    return newId;
+  });
+}
+
 export async function testIntegration(userId: string, workspaceId: string, integrationId: string) {
   return withUser(userId, async (tx) => {
     await requireAction(tx, workspaceId, "integration.manage");

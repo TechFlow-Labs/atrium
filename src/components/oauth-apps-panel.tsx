@@ -1,9 +1,10 @@
 "use client";
 
 import { useActionState } from "react";
-import { deleteOAuthAppAction, saveOAuthAppAction } from "@/app/actions";
+import { deleteOAuthAppAction, saveOAuthAppAction, shareOAuthAppAction } from "@/app/actions";
 import { Button } from "@/components/ui/button";
 import { Input, Label } from "@/components/ui/field";
+import { ShareToWorkspaceDialog } from "@/components/share-to-workspace-dialog";
 import { OAUTH_PROVIDER_LABELS, OAUTH_PROVIDERS, type OAuthProvider } from "@/lib/oauth-providers";
 import type { OAuthAppOverview } from "@/server/integrations/oauth-apps";
 import { IntegrationGuide } from "@/components/integration-guide";
@@ -132,13 +133,23 @@ function OAuthAppCard({
       ) : null}
 
       {canAdmin && status.source === "workspace" ? (
-        <form action={deleteOAuthAppAction}>
-          <input type="hidden" name="workspaceId" value={workspaceId} />
-          <input type="hidden" name="provider" value={provider} />
-          <Button type="submit" variant="outline" size="sm">
-            Remove workspace settings
-          </Button>
-        </form>
+        <div className="flex flex-wrap items-center gap-2">
+          <ShareToWorkspaceDialog
+            workspaceId={workspaceId}
+            title={`Share ${label} OAuth app`}
+            description="Copies the client ID and secret into another workspace you administer. Each workspace keeps its own encrypted copy."
+            action={shareOAuthAppAction}
+            hiddenFields={{ provider }}
+            triggerLabel="Share to workspace"
+          />
+          <form action={deleteOAuthAppAction}>
+            <input type="hidden" name="workspaceId" value={workspaceId} />
+            <input type="hidden" name="provider" value={provider} />
+            <Button type="submit" variant="outline" size="sm">
+              Remove workspace settings
+            </Button>
+          </form>
+        </div>
       ) : null}
     </article>
   );
