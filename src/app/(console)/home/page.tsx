@@ -4,7 +4,9 @@ import Link from "next/link";
 import { connection } from "next/server";
 import { redirect } from "next/navigation";
 import { AlertTriangle, ArrowRight } from "lucide-react";
+import { createProjectAction } from "@/app/actions";
 import { HomeActionsMenu } from "@/components/home-actions-menu";
+import { HomeNoProjects } from "@/components/home-no-projects";
 import { HomeSourceFilter } from "@/components/home-source-filter";
 import { ProviderIcon } from "@/components/provider-icon";
 import { WorkspaceIconBadge } from "@/components/workspace-icon-picker";
@@ -12,6 +14,9 @@ import { Badge } from "@/components/ui/badge";
 import { getSessionUser } from "@/server/auth/session";
 import { workspaceContext } from "@/server/auth/workspace";
 import { homeFeed } from "@/server/home/service";
+import { providerCatalog } from "@/server/integrations/catalog";
+import { listIntegrations } from "@/server/integrations/service";
+import { isTaskProvider } from "@/server/integrations/types";
 import { formatWhen } from "@/lib/utils";
 
 export const instant = false;
@@ -56,6 +61,26 @@ async function HomeContent({
   const inProgressHref = `/tasks?status=in_progress${sourceQuery}`;
   const doneHref = `/tasks?status=done${sourceQuery}`;
   const projectsHref = "/projects";
+  const canManageProjects = current.role === "owner" || current.role === "admin";
+  const showNoProjects = feed.stats.projects === 0;
+  const [integrations, catalog] = showNoProjects
+    ? await Promise.all([
+        listIntegrations(user.id, current.id),
+        providerCatalog(user.id, current.id),
+      ])
+    : [null, null];
+  const callbackBase = (process.env.BETTER_AUTH_URL ?? "").replace(/\/$/, "");
+  const taskIntegrations =
+    integrations
+      ?.filter((item) => isTaskProvider(item.provider) && item.status !== "revoked")
+      .map((item) => ({
+        id: item.id,
+        provider: item.provider,
+        status: item.status,
+        display_name: item.display_name,
+        hasCredential: item.hasCredential,
+      })) ?? [];
+  const taskProviders = catalog?.providers.filter((provider) => isTaskProvider(provider)) ?? [];
 
   return (
     <div className="space-y-8">
@@ -198,6 +223,18 @@ async function HomeContent({
           ))}
         </Panel>
       </section>
+
+      {showNoProjects ? (
+        <HomeNoProjects
+          workspaceId={current.id}
+          canManage={canManageProjects}
+          integrations={taskIntegrations}
+          providers={taskProviders}
+          oauth={catalog?.oauth ?? {}}
+          callbackBase={callbackBase}
+          createAction={createProjectAction}
+        />
+      ) : null}
     </div>
   );
 }
