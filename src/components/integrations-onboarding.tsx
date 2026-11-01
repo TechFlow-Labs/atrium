@@ -129,7 +129,7 @@ export function IntegrationsOnboarding({
                       <ShareToWorkspaceDialog
                         workspaceId={workspaceId}
                         title={`Share ${integration.display_name}`}
-                        description="Copies this connection into another workspace you administer. Linked projects and sync history stay here."
+                        description="Copies this connection into another workspace you administer. OAuth app settings for this provider are copied when saved here. Linked projects and sync history stay here."
                         action={shareIntegrationAction}
                         hiddenFields={{ integrationId: integration.id }}
                       />

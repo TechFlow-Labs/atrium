@@ -159,6 +159,52 @@ export async function deleteOAuthApp(userId: string, workspaceId: string, provid
   });
 }
 
+/**
+ * Copy OAuth app settings from one workspace to another inside an open transaction.
+ * Returns false when the source has no saved app for that provider.
+ */
+export async function copyOAuthAppSettings(
+  tx: Tx,
+  sourceWorkspaceId: string,
+  targetWorkspaceId: string,
+  provider: OAuthProvider,
+): Promise<boolean> {
+  const source = await tx.execute<{
+    client_id: string;
+    client_secret_ciphertext: string;
+    site_url: string | null;
+  }>(sql`
+    select client_id, client_secret_ciphertext, site_url
+    from oauth_app_settings
+    where workspace_id = ${sourceWorkspaceId}::uuid and provider = ${provider}
+  `);
+  const row = source[0];
+  if (!row) return false;
+
+  // Re-encrypt so each workspace owns its own ciphertext blob.
+  const plaintext = decryptSecret(row.client_secret_ciphertext);
+  const ciphertext = encryptSecret(plaintext);
+
+  await tx.execute(sql`
+    insert into oauth_app_settings (workspace_id, provider, client_id, client_secret_ciphertext, site_url, updated_by)
+    values (
+      ${targetWorkspaceId}::uuid,
+      ${provider},
+      ${row.client_id},
+      ${ciphertext},
+      ${row.site_url},
+      current_setting('app.current_user_id', true)
+    )
+    on conflict (workspace_id, provider) do update set
+      client_id = excluded.client_id,
+      client_secret_ciphertext = excluded.client_secret_ciphertext,
+      site_url = excluded.site_url,
+      updated_by = excluded.updated_by,
+      updated_at = now()
+  `);
+  return true;
+}
+
 /** Copy workspace OAuth app settings into another workspace the caller can administer. */
 export async function shareOAuthAppToWorkspace(
   userId: string,
@@ -173,41 +219,10 @@ export async function shareOAuthAppToWorkspace(
     await requireAction(tx, sourceWorkspaceId, "integration.manage");
     await requireAction(tx, targetWorkspaceId, "integration.manage");
 
-    const source = await tx.execute<{
-      client_id: string;
-      client_secret_ciphertext: string;
-      site_url: string | null;
-    }>(sql`
-      select client_id, client_secret_ciphertext, site_url
-      from oauth_app_settings
-      where workspace_id = ${sourceWorkspaceId}::uuid and provider = ${provider}
-    `);
-    const row = source[0];
-    if (!row) {
+    const copied = await copyOAuthAppSettings(tx, sourceWorkspaceId, targetWorkspaceId, provider);
+    if (!copied) {
       throw new Error("This workspace has no saved OAuth app for that provider");
     }
-
-    // Re-encrypt so each workspace owns its own ciphertext blob.
-    const plaintext = decryptSecret(row.client_secret_ciphertext);
-    const ciphertext = encryptSecret(plaintext);
-
-    await tx.execute(sql`
-      insert into oauth_app_settings (workspace_id, provider, client_id, client_secret_ciphertext, site_url, updated_by)
-      values (
-        ${targetWorkspaceId}::uuid,
-        ${provider},
-        ${row.client_id},
-        ${ciphertext},
-        ${row.site_url},
-        current_setting('app.current_user_id', true)
-      )
-      on conflict (workspace_id, provider) do update set
-        client_id = excluded.client_id,
-        client_secret_ciphertext = excluded.client_secret_ciphertext,
-        site_url = excluded.site_url,
-        updated_by = excluded.updated_by,
-        updated_at = now()
-    `);
 
     await writeAudit(tx, {
       workspaceId: sourceWorkspaceId,

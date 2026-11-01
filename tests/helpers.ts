@@ -20,6 +20,7 @@ export async function resetDatabase(): Promise<void> {
       fake_provider_tasks,
       fake_provider_projects,
       integrations,
+      oauth_app_settings,
       tasks,
       milestones,
       projects,

@@ -7,13 +7,14 @@ import { textArray } from "../db/sql";
 import { sha256 } from "../crypto/secrets";
 import { integrationView, openCredential, sealCredential } from "./credentials";
 import { giteaOAuthSiteUrl } from "./gitea-site";
-import { resolveOAuthApp } from "./oauth-apps";
+import { copyOAuthAppSettings, resolveOAuthApp } from "./oauth-apps";
 import { seedFakeProject } from "./fake";
 import { normalizeLinearToken } from "./linear";
 import { getAdapter, OAUTH_SCOPES } from "./registry";
 import { validateObsidianConnection } from "./obsidian";
 import { validateSlackConnection } from "./slack";
 import { ensureFreshCredentials } from "./token-refresh";
+import { isOAuthProvider } from "@/lib/oauth-providers";
 import type {
   FieldMappings,
   IntegrationProviderId,
@@ -313,6 +314,12 @@ export async function shareIntegrationToWorkspace(
     `);
     const newId = inserted[0]?.id;
     if (!newId) throw new Error("Could not share the integration");
+
+    // Also copy OAuth app settings when the source workspace has them, so the
+    // target's Integrations OAuth card is filled the same way.
+    if (isOAuthProvider(row.provider)) {
+      await copyOAuthAppSettings(tx, sourceWorkspaceId, targetWorkspaceId, row.provider);
+    }
 
     await writeAudit(tx, {
       workspaceId: sourceWorkspaceId,
