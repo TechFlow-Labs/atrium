@@ -33,7 +33,7 @@ import {
   ProjectStatusBreakdown,
   type ProjectDashboardStats,
 } from "@/components/project-dashboard";
-import { ProjectForm } from "@/components/project-form";
+import { ProjectForm, type ProjectFormIntegration } from "@/components/project-form";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { projectDisplayName } from "@/lib/project-display";
@@ -224,6 +224,7 @@ export function ProjectsBoard({
   scopeLabel,
   canWrite,
   createAction,
+  integrations = [],
   statusNav,
   portfolio,
   taskStats,
@@ -236,6 +237,7 @@ export function ProjectsBoard({
   scopeLabel: string;
   canWrite: boolean;
   createAction: CreateProjectAction;
+  integrations?: ProjectFormIntegration[];
   statusNav: ReactNode;
   portfolio: {
     active: number;
@@ -520,7 +522,9 @@ export function ProjectsBoard({
               Customize
             </Button>
           ) : null}
-          {canWrite ? <ProjectForm workspaceId={workspaceId} action={createAction} /> : null}
+          {canWrite ? (
+            <ProjectForm workspaceId={workspaceId} action={createAction} integrations={integrations} />
+          ) : null}
         </div>
       </div>
 
@@ -792,7 +796,11 @@ export function ProjectsBoard({
                     </p>
                     {canWrite ? (
                       <div className="mt-4">
-                        <ProjectForm workspaceId={workspaceId} action={createAction} />
+                        <ProjectForm
+                          workspaceId={workspaceId}
+                          action={createAction}
+                          integrations={integrations}
+                        />
                       </div>
                     ) : null}
                   </div>

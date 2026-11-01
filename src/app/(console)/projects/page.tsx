@@ -9,6 +9,8 @@ import { createProjectAction } from "@/app/actions";
 import { ProjectsBoard } from "@/components/projects-board";
 import { getSessionUser } from "@/server/auth/session";
 import { workspaceContext } from "@/server/auth/workspace";
+import { listIntegrations } from "@/server/integrations/service";
+import { isTaskProvider } from "@/server/integrations/types";
 import { getProjectsAnalytics, listProjects } from "@/server/projects/service";
 import {
   DEFAULT_PROJECTS_LAYOUT,
@@ -39,7 +41,7 @@ async function ProjectsContent({ searchParams }: { searchParams: Promise<{ statu
   // eslint-disable-next-line react-hooks/purity -- connection() already opted this request out of prerender
   const now = Date.now();
   const cookieStore = await cookies();
-  const [projects, analytics, prefRows] = await Promise.all([
+  const [projects, analytics, prefRows, integrations] = await Promise.all([
     listProjects(user.id, current.id, { status, query: params.q }),
     getProjectsAnalytics(user.id, current.id, { status }, now),
     withUser(user.id, (tx) =>
@@ -48,8 +50,21 @@ async function ProjectsContent({ searchParams }: { searchParams: Promise<{ statu
         where user_id = current_setting('app.current_user_id', true)
       `),
     ),
+    listIntegrations(user.id, current.id),
   ]);
   const canWrite = current.role === "owner" || current.role === "admin";
+  const linkableIntegrations = integrations
+    .filter(
+      (integration) =>
+        isTaskProvider(integration.provider)
+        && integration.status === "connected"
+        && integration.hasCredential,
+    )
+    .map((integration) => ({
+      id: integration.id,
+      provider: integration.provider,
+      displayName: integration.display_name,
+    }));
   const scopeLabel =
     status === "archived" ? "archived projects" : status === "all" ? "all projects" : "active projects";
   const layout =
@@ -96,6 +111,7 @@ async function ProjectsContent({ searchParams }: { searchParams: Promise<{ statu
       scopeLabel={scopeLabel}
       canWrite={canWrite}
       createAction={createProjectAction}
+      integrations={linkableIntegrations}
       statusNav={statusNav}
       portfolio={analytics.portfolio}
       taskStats={analytics.tasks}
