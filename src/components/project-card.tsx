@@ -53,11 +53,12 @@ export function ProjectCard({
         aria-label={`Open ${title} dashboard`}
       />
 
-      <div className={cn("w-1.5 shrink-0", accent.bar)} aria-hidden="true" />
+      <div className={cn("pointer-events-none w-1.5 shrink-0", accent.bar)} aria-hidden="true" />
 
-      <div className="relative z-10 flex min-w-0 flex-1 flex-col">
+      {/* pointer-events-none so the stretched Link below receives clicks; re-enable on controls. */}
+      <div className="pointer-events-none relative z-10 flex min-w-0 flex-1 flex-col">
         <div className={cn("flex min-h-[7.25rem] items-start justify-between gap-3 px-4 pb-3 pt-4", accent.wash)}>
-          <div className="pointer-events-none min-w-0">
+          <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
               <p className="text-[0.65rem] font-medium uppercase tracking-[0.22em] text-muted">Project</p>
               <Badge tone={project.ownership_mode === "native" ? "native" : "external"}>
@@ -79,13 +80,11 @@ export function ProjectCard({
                 />
               </span>
             ) : null}
-            <div className="pointer-events-none">
-              <ProviderIcon provider={project.provider} size="md" />
-            </div>
+            <ProviderIcon provider={project.provider} size="md" />
           </div>
         </div>
 
-        <div className="pointer-events-none flex flex-1 flex-col px-4 py-3">
+        <div className="flex flex-1 flex-col px-4 py-3">
           <p className="line-clamp-3 text-sm text-muted">
             {project.description || "No description yet."}
           </p>
