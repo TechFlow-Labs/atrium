@@ -48,7 +48,7 @@ export function TaskForm({
   integrations = [],
   returnTo,
   action,
-  triggerLabel = "New task",
+  triggerLabel = "New issue",
 }: {
   workspaceId: string;
   projectId: string;
@@ -183,9 +183,9 @@ export function TaskForm({
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Add a task</DialogTitle>
+          <DialogTitle>Add an issue</DialogTitle>
           <DialogDescription>
-            Create a task in this workspace, or sync it to a connected provider project.
+            Create an issue in this workspace, or sync it to a connected provider project.
           </DialogDescription>
         </DialogHeader>
         <form action={formAction} className="grid gap-4">
@@ -206,7 +206,7 @@ export function TaskForm({
                 />
                 <span>
                   <span className="block text-sm font-medium">Atrium project</span>
-                  <span className="block text-xs text-muted">Keep the task in this workspace only.</span>
+                  <span className="block text-xs text-muted">Keep the issue in this workspace only.</span>
                 </span>
               </label>
               <label className="flex cursor-pointer items-start gap-2.5 rounded-lg border px-3 py-2.5 has-[:checked]:border-primary">
@@ -408,7 +408,7 @@ export function TaskForm({
                 || (destination === "provider" && (loadingRemotes || !selectedRemote || !integrationId))
               }
             >
-              {pending ? "Saving…" : destination === "provider" ? "Create and sync" : "Create task"}
+              {pending ? "Saving…" : destination === "provider" ? "Create and sync" : "Create issue"}
             </Button>
           </div>
         </form>

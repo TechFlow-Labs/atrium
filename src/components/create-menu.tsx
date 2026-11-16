@@ -30,9 +30,9 @@ type CreateOption = {
 const OPTIONS: CreateOption[] = [
   {
     href: "/tasks",
-    title: "New task",
+    title: "New issue",
     description: "Add work to a project",
-    detail: "Create a task in this workspace. Native projects accept full edits; provider projects only expose supported fields.",
+    detail: "Create an issue in this workspace. Native projects accept full edits; provider projects only expose supported fields.",
     icon: CheckSquare,
   },
   {

@@ -246,7 +246,7 @@ export function ThemeSettings({
       </div>
 
       <div className="mt-6">
-        <h3 className="text-sm font-medium">Tasks</h3>
+        <h3 className="text-sm font-medium">Issues</h3>
         <div className="mt-3 space-y-3">
           <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-border bg-background p-4">
             <Checkbox
@@ -254,12 +254,12 @@ export function ThemeSettings({
               checked={!providerTilesOn}
               disabled={pending}
               onCheckedChange={(value) => setProviderTiles(value !== true)}
-              aria-label="Disable provider colors on task tiles"
+              aria-label="Disable provider colors on issue tiles"
             />
             <span className="min-w-0">
-              <span className="block font-medium">Disable provider colors on task tiles</span>
+              <span className="block font-medium">Disable provider colors on issue tiles</span>
               <span className="mt-0.5 block text-xs text-muted">
-                Hide source-colored rails and washes on the tasks board and list. Provider icons still show which system a task came from.
+                Hide source-colored rails and washes on the issues board and list. Provider icons still show which system an issue came from.
               </span>
             </span>
           </label>
@@ -269,12 +269,12 @@ export function ThemeSettings({
               checked={!groupRelatedOn}
               disabled={pending}
               onCheckedChange={(value) => setGroupRelated(value !== true)}
-              aria-label="Disable related-task grouping"
+              aria-label="Disable related-issue grouping"
             />
             <span className="min-w-0">
-              <span className="block font-medium">Disable related-task grouping</span>
+              <span className="block font-medium">Disable related-issue grouping</span>
               <span className="mt-0.5 block text-xs text-muted">
-                Show the tasks list as a flat feed instead of clustering linked tasks together. You can also toggle this from the tasks screen.
+                Show the issues list as a flat feed instead of clustering linked issues together. You can also toggle this from the issues screen.
               </span>
             </span>
           </label>

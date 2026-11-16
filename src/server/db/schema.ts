@@ -101,9 +101,22 @@ export const workspaceInvitations = pgTable("workspace_invitations", {
   createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
 });
 
+export const products = pgTable("products", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  workspaceId: uuid("workspace_id").notNull(),
+  name: text("name").notNull(),
+  description: text("description").notNull().default(""),
+  status: text("status").$type<"active" | "archived">().notNull().default("active"),
+  createdBy: text("created_by").notNull(),
+  archivedAt: timestamp("archived_at", { withTimezone: true, mode: "date" }),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
+});
+
 export const projects = pgTable("projects", {
   id: uuid("id").primaryKey().defaultRandom(),
   workspaceId: uuid("workspace_id").notNull(),
+  productId: uuid("product_id").notNull(),
   name: text("name").notNull(),
   nickname: text("nickname"),
   description: text("description").notNull().default(""),

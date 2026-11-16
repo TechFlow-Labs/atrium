@@ -150,7 +150,7 @@ export function TaskDetailForm({
             }}
             aria-label="Title"
             className="w-full bg-transparent text-4xl leading-tight outline-none placeholder:text-muted focus-visible:ring-0"
-            placeholder="Task title"
+            placeholder="Issue title"
           />
         ) : (
           <h1 className="text-4xl leading-tight">{title}</h1>
@@ -271,7 +271,7 @@ export function TaskDetailForm({
           <MarkdownContent content={description} />
         </div>
       ) : (
-        <p className="text-sm text-muted">No description for this task.</p>
+        <p className="text-sm text-muted">No description for this issue.</p>
       )}
 
       <dl className="grid gap-3 rounded-lg border bg-card p-4 text-sm sm:grid-cols-2">
@@ -329,7 +329,7 @@ export function TaskDetailForm({
 
       {error ? <p className="text-sm text-destructive">{error}</p> : null}
       {!canWrite ? (
-        <p className="text-sm text-muted">Your role can view this task. Members and above can edit it.</p>
+        <p className="text-sm text-muted">Your role can view this issue. Members and above can edit it.</p>
       ) : null}
     </div>
   );

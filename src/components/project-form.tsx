@@ -28,6 +28,11 @@ export type ProjectFormIntegration = {
   displayName: string;
 };
 
+export type ProjectFormProduct = {
+  id: string;
+  name: string;
+};
+
 type RemoteProjectOption = {
   providerId: string;
   name: string;
@@ -39,15 +44,20 @@ export function ProjectForm({
   workspaceId,
   action,
   integrations = [],
+  products = [],
+  productId: initialProductId,
 }: {
   workspaceId: string;
   action: (state: ActionState, formData: FormData) => Promise<ActionState>;
   integrations?: ProjectFormIntegration[];
+  products?: ProjectFormProduct[];
+  productId?: string;
 }) {
   const [open, setOpen] = useState(false);
   const [createState, createAction, createPending] = useActionState<ActionState, FormData>(action, {});
   const [linkState, linkAction, linkPending] = useActionState<ActionState, FormData>(linkProjectAction, {});
   const [seenError, setSeenError] = useState<string | null>(null);
+  const [productId, setProductId] = useState(initialProductId ?? products[0]?.id ?? "");
 
   const canLinkProvider = integrations.length > 0;
   const [mode, setMode] = useState<"native" | "integration">("native");
@@ -94,6 +104,16 @@ export function ProjectForm({
       setIntegrationId(connections[0]?.id ?? "");
     }
   }, [connections, integrationId]);
+
+  useEffect(() => {
+    if (initialProductId) {
+      setProductId(initialProductId);
+      return;
+    }
+    if (!products.some((product) => product.id === productId)) {
+      setProductId(products[0]?.id ?? "");
+    }
+  }, [initialProductId, productId, products]);
 
   useEffect(() => {
     if (!open || mode !== "integration" || !integrationId) return;
@@ -169,6 +189,28 @@ export function ProjectForm({
 
         <form action={mode === "native" ? createAction : linkAction} className="grid gap-4">
           <input type="hidden" name="workspaceId" value={workspaceId} />
+          {products.length === 1 ? (
+            <input type="hidden" name="productId" value={productId} />
+          ) : products.length > 1 ? (
+            <div>
+              <Label htmlFor="project-product">Product</Label>
+              <MenuSelect
+                id="project-product"
+                name="productId"
+                value={productId}
+                onValueChange={setProductId}
+                className="mt-1"
+                aria-label="Product"
+                required
+                options={products.map((product) => ({
+                  value: product.id,
+                  label: product.name,
+                }))}
+              />
+            </div>
+          ) : (
+            <input type="hidden" name="productId" value={productId} />
+          )}
 
           {canLinkProvider ? (
             <fieldset className="grid gap-2">

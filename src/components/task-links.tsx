@@ -110,7 +110,7 @@ export function TaskLinks({
       </div>
 
       {!hasAnyLinks ? (
-        <p className="px-1 text-sm text-muted">No linked tasks yet.</p>
+        <p className="px-1 text-sm text-muted">No linked issues yet.</p>
       ) : (
         <div className="space-y-4">
           {RELATION_SECTIONS.map((section) => {

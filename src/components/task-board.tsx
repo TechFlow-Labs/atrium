@@ -454,7 +454,7 @@ export function TaskBoard({
                 {insertAt === 0 ? <DropInsertBar /> : null}
                 {visualCount === 0 && !isOver ? (
                   <div className="flex h-20 shrink-0 items-center justify-center rounded-md border border-dashed border-border/80 text-xs text-muted">
-                    No tasks
+                    No issues
                   </div>
                 ) : null}
                 {columnTasks.map((task, index) => {

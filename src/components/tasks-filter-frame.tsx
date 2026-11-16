@@ -82,7 +82,7 @@ export function TasksFilterFrame({
         ) : null}
       </div>
       <div className="flex min-h-0 flex-1 flex-col" aria-busy={pending} data-reveal="" data-tour="task-list">
-        {pending ? <ResultsLoader label="Updating tasks" /> : children}
+        {pending ? <ResultsLoader label="Updating issues" /> : children}
       </div>
     </div>
   );

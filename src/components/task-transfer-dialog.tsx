@@ -50,8 +50,8 @@ export function TaskTransferDialog({
   const [state, formAction, pending] = useActionState(transferTasksAction, {});
 
   const countLabel = useMemo(() => {
-    if (ids.length === 1) return "1 task";
-    return `${ids.length} tasks`;
+    if (ids.length === 1) return "1 issue";
+    return `${ids.length} issues`;
   }, [ids.length]);
 
   useEffect(() => {
@@ -61,7 +61,7 @@ export function TaskTransferDialog({
   function openDialog() {
     const nextIds = onBeforeOpen ? onBeforeOpen() : (taskIds ?? ids);
     if (!nextIds || nextIds.length === 0) {
-      setLoadError("Select at least one task to transfer");
+      setLoadError("Select at least one issue to transfer");
       setOpen(true);
       setIds([]);
       return;
@@ -81,7 +81,7 @@ export function TaskTransferDialog({
       }
       setWorkspaces(result.workspaces);
       if (result.workspaces.length === 0) {
-        setLoadError("Join another workspace as a member before transferring tasks");
+        setLoadError("Join another workspace as a member before transferring issues");
       }
     });
   }

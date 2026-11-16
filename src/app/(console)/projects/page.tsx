@@ -11,6 +11,7 @@ import { getSessionUser } from "@/server/auth/session";
 import { workspaceContext } from "@/server/auth/workspace";
 import { listIntegrations } from "@/server/integrations/service";
 import { isTaskProvider } from "@/server/integrations/types";
+import { listProducts } from "@/server/products/service";
 import { getProjectsAnalytics, listProjects } from "@/server/projects/service";
 import {
   DEFAULT_PROJECTS_LAYOUT,
@@ -41,7 +42,7 @@ async function ProjectsContent({ searchParams }: { searchParams: Promise<{ statu
   // eslint-disable-next-line react-hooks/purity -- connection() already opted this request out of prerender
   const now = Date.now();
   const cookieStore = await cookies();
-  const [projects, analytics, prefRows, integrations] = await Promise.all([
+  const [projects, analytics, prefRows, integrations, products] = await Promise.all([
     listProjects(user.id, current.id, { status, query: params.q }),
     getProjectsAnalytics(user.id, current.id, { status }, now),
     withUser(user.id, (tx) =>
@@ -51,6 +52,7 @@ async function ProjectsContent({ searchParams }: { searchParams: Promise<{ statu
       `),
     ),
     listIntegrations(user.id, current.id),
+    listProducts(user.id, current.id, { status: "active" }),
   ]);
   const canWrite = current.role === "owner" || current.role === "admin";
   const linkableIntegrations = integrations
@@ -65,6 +67,7 @@ async function ProjectsContent({ searchParams }: { searchParams: Promise<{ statu
       provider: integration.provider,
       displayName: integration.display_name,
     }));
+  const productOptions = products.map((product) => ({ id: product.id, name: product.name }));
   const scopeLabel =
     status === "archived" ? "archived projects" : status === "all" ? "all projects" : "active projects";
   const layout =
@@ -112,6 +115,7 @@ async function ProjectsContent({ searchParams }: { searchParams: Promise<{ statu
       canWrite={canWrite}
       createAction={createProjectAction}
       integrations={linkableIntegrations}
+      products={productOptions}
       statusNav={statusNav}
       portfolio={analytics.portfolio}
       taskStats={analytics.tasks}

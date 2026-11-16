@@ -423,7 +423,14 @@ async function findLinkedProjectId(
 export async function createExternalProject(
   userId: string,
   workspaceId: string,
-  input: { integrationId: string; providerProjectId: string; name: string; key?: string | null; url?: string | null },
+  input: {
+    integrationId: string;
+    providerProjectId: string;
+    name: string;
+    key?: string | null;
+    url?: string | null;
+    productId?: string | null;
+  },
 ): Promise<string> {
   return withUser(userId, async (tx) => {
     await requireAction(tx, workspaceId, "project.create");
@@ -442,10 +449,18 @@ export async function createExternalProject(
           : "Slack connections cannot link task projects",
       );
     }
+    const { resolveProductId } = await import("../products/service");
+    const productId = await resolveProductId(tx, workspaceId, input.productId);
     const adapter = getAdapter(integration.provider);
     const rows = await tx.execute<{ id: string }>(sql`
-      insert into projects (workspace_id, name, ownership_mode, created_by)
-      values (${workspaceId}::uuid, ${input.name.trim()}, 'external', current_setting('app.current_user_id', true))
+      insert into projects (workspace_id, product_id, name, ownership_mode, created_by)
+      values (
+        ${workspaceId}::uuid,
+        ${productId}::uuid,
+        ${input.name.trim()},
+        'external',
+        current_setting('app.current_user_id', true)
+      )
       returning id
     `);
     const projectId = rows[0]?.id;

@@ -11,6 +11,7 @@ import {
   type ReactNode,
 } from "react";
 import {
+  Boxes,
   Building2,
   CalendarRange,
   Check,
@@ -18,7 +19,7 @@ import {
   FolderKanban,
   GripVertical,
   Home,
-  ListTodo,
+  CircleDot,
   MessagesSquare,
   NotebookPen,
   PanelLeftClose,
@@ -39,8 +40,9 @@ type NavLink = { label: string; href: string; icon: LucideIcon; group: string | 
 
 const LINKS: NavLink[] = [
   { label: "Home", href: "/home", icon: Home, group: null },
+  { label: "Products", href: "/products", icon: Boxes, group: "work" },
   { label: "Projects", href: "/projects", icon: FolderKanban, group: "work" },
-  { label: "Tasks", href: "/tasks", icon: ListTodo, group: "work" },
+  { label: "Issues", href: "/issues", icon: CircleDot, group: "work" },
   { label: "Schedule", href: "/schedule", icon: CalendarRange, group: "work" },
   { label: "Chats", href: "/chats", icon: MessagesSquare, group: "inbox" },
   { label: "Notes", href: "/notes", icon: NotebookPen, group: "inbox" },
@@ -83,12 +85,31 @@ export function parseSidebarOrder(raw?: string | null): string[] {
     .split(",")
     .map((part) => {
       const href = part.trim();
-      // Migrate former Calendar nav entries to Schedule.
-      return href === "/calendar" ? "/schedule" : href;
+      // Migrate former Calendar → Schedule and Tasks → Issues.
+      if (href === "/calendar") return "/schedule";
+      if (href === "/tasks") return "/issues";
+      return href;
     })
     .filter((href) => known.has(href));
   const unique = [...new Set(parsed)];
-  return unique.length > 0 ? unique : [...DEFAULT_ORDER];
+  if (unique.length === 0) return [...DEFAULT_ORDER];
+  // Insert any new default links at their default position (older cookies omit them).
+  for (const href of DEFAULT_ORDER) {
+    if (unique.includes(href)) continue;
+    const defaultIndex = DEFAULT_ORDER.indexOf(href);
+    let insertAt = unique.length;
+    for (let i = defaultIndex - 1; i >= 0; i -= 1) {
+      const prev = DEFAULT_ORDER[i];
+      if (!prev) continue;
+      const idx = unique.indexOf(prev);
+      if (idx !== -1) {
+        insertAt = idx + 1;
+        break;
+      }
+    }
+    unique.splice(insertAt, 0, href);
+  }
+  return unique;
 }
 
 export function parseSidebarGroups(raw?: string | null): Record<string, boolean> {

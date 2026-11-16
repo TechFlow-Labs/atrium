@@ -64,7 +64,7 @@ async function TaskDetailContent({
             className="inline-flex items-center gap-1.5 text-sm text-muted transition hover:text-foreground"
           >
             <ArrowLeft className="size-3.5" aria-hidden="true" />
-            Back to tasks
+            Back to issues
           </Link>
           <div className="flex items-center gap-2">
             <ProviderIcon provider={task.provider} />

@@ -79,8 +79,9 @@ export function Shell({
           <nav className="flex w-full gap-3 overflow-x-auto text-sm md:hidden">
             {[
               ["Home", "/home"],
+              ["Products", "/products"],
               ["Projects", "/projects"],
-              ["Tasks", "/tasks"],
+              ["Issues", "/issues"],
               ["Schedule", "/schedule"],
               ["Chats", "/chats"],
               ["Notes", "/notes"],

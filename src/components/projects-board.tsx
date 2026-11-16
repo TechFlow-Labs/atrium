@@ -33,7 +33,11 @@ import {
   ProjectStatusBreakdown,
   type ProjectDashboardStats,
 } from "@/components/project-dashboard";
-import { ProjectForm, type ProjectFormIntegration } from "@/components/project-form";
+import {
+  ProjectForm,
+  type ProjectFormIntegration,
+  type ProjectFormProduct,
+} from "@/components/project-form";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { projectDisplayName } from "@/lib/project-display";
@@ -225,6 +229,7 @@ export function ProjectsBoard({
   canWrite,
   createAction,
   integrations = [],
+  products = [],
   statusNav,
   portfolio,
   taskStats,
@@ -238,6 +243,7 @@ export function ProjectsBoard({
   canWrite: boolean;
   createAction: CreateProjectAction;
   integrations?: ProjectFormIntegration[];
+  products?: ProjectFormProduct[];
   statusNav: ReactNode;
   portfolio: {
     active: number;
@@ -523,7 +529,12 @@ export function ProjectsBoard({
             </Button>
           ) : null}
           {canWrite ? (
-            <ProjectForm workspaceId={workspaceId} action={createAction} integrations={integrations} />
+            <ProjectForm
+              workspaceId={workspaceId}
+              action={createAction}
+              integrations={integrations}
+              products={products}
+            />
           ) : null}
         </div>
       </div>
@@ -676,7 +687,7 @@ export function ProjectsBoard({
               statusMix: (
                 <ProjectStatusBreakdown
                   stats={taskStats}
-                  caption={`${taskStats.total} tasks across ${scopeLabel}`}
+                  caption={`${taskStats.total} issues across ${scopeLabel}`}
                 />
               ),
               busiest: (
@@ -800,6 +811,7 @@ export function ProjectsBoard({
                           workspaceId={workspaceId}
                           action={createAction}
                           integrations={integrations}
+                          products={products}
                         />
                       </div>
                     ) : null}

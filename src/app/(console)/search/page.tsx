@@ -56,7 +56,7 @@ async function SearchContent({ searchParams }: { searchParams: Promise<{ q?: str
       ) : null}
       {results.tasks.length > 0 ? (
         <section>
-          <h2 className="text-xl">Tasks</h2>
+          <h2 className="text-xl">Issues</h2>
           <ul className="mt-2 divide-y rounded-lg border bg-card">
             {results.tasks.map((task) => (
               <li key={String(task.id)} className="flex items-center justify-between px-3 py-3 text-sm">

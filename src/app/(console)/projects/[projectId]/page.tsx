@@ -29,12 +29,14 @@ import { Button } from "@/components/ui/button";
 import { Input, Label, Textarea } from "@/components/ui/field";
 import { getSessionUser } from "@/server/auth/session";
 import { workspaceContext } from "@/server/auth/workspace";
+import { listProducts } from "@/server/products/service";
 import { getProject, listMilestones } from "@/server/projects/service";
 import { listTasks } from "@/server/tasks/service";
 import { sql } from "drizzle-orm";
 import { withUser } from "@/server/db/client";
 import { projectDisplayName } from "@/lib/project-display";
 import { formatWhen } from "@/lib/utils";
+import { MenuSelect } from "@/components/ui/menu-select";
 
 export const instant = false;
 
@@ -54,8 +56,11 @@ async function ProjectContent({ params }: { params: Promise<{ projectId: string 
   const { current } = await workspaceContext(user.id);
   const project = await getProject(user.id, current.id, projectId);
   if (!project) notFound();
-  const tasks = await listTasks(user.id, current.id, { projectId });
-  const milestones = await listMilestones(user.id, current.id, projectId);
+  const [tasks, milestones, products] = await Promise.all([
+    listTasks(user.id, current.id, { projectId }),
+    listMilestones(user.id, current.id, projectId),
+    listProducts(user.id, current.id, { status: "active" }),
+  ]);
   const records = await withUser(user.id, (tx) => tx.execute(sql`
     select entity_type, provider_id, raw from external_records
     where workspace_id = ${current.id}::uuid and local_entity_id is null
@@ -88,6 +93,17 @@ async function ProjectContent({ params }: { params: Promise<{ projectId: string 
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="text-xs uppercase tracking-[0.18em] text-muted">
+            {project.product_id ? (
+              <>
+                <Link
+                  href={`/products/${project.product_id}`}
+                  className="transition hover:text-foreground"
+                >
+                  {project.product_name ?? "Product"}
+                </Link>
+                {" · "}
+              </>
+            ) : null}
             <Link href="/projects" className="transition hover:text-foreground">
               Projects
             </Link>
@@ -107,7 +123,7 @@ async function ProjectContent({ params }: { params: Promise<{ projectId: string 
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <Button asChild variant="outline">
-            <Link href={`/tasks?project=${projectFilter}`}>All tasks</Link>
+            <Link href={`/tasks?project=${projectFilter}`}>All issues</Link>
           </Button>
           <Button asChild variant="outline">
             <Link href={`/tasks?view=board&project=${projectFilter}`}>Board</Link>
@@ -193,7 +209,7 @@ async function ProjectContent({ params }: { params: Promise<{ projectId: string 
         />
         <ProjectStatCard
           href={`/tasks?project=${projectFilter}`}
-          label="All tasks"
+          label="All issues"
           value={stats.total}
           hint="Everything in this project"
           icon={ListTodo}
@@ -279,7 +295,7 @@ async function ProjectContent({ params }: { params: Promise<{ projectId: string 
       <section data-tour="project-updates">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h2 className="text-2xl">Recent tasks</h2>
+            <h2 className="text-2xl">Recent issues</h2>
             <p className="text-sm text-muted">Latest updates across this project.</p>
           </div>
           <Link
@@ -289,7 +305,7 @@ async function ProjectContent({ params }: { params: Promise<{ projectId: string 
             Open full list
           </Link>
         </div>
-        {recentTasks.length === 0 ? <p className="mt-3 text-sm text-muted">This project has no tasks yet.</p> : null}
+        {recentTasks.length === 0 ? <p className="mt-3 text-sm text-muted">This project has no issues yet.</p> : null}
         <ul className="mt-3 divide-y rounded-lg border bg-card">
           {recentTasks.map((task) => (
             <li key={task.id} className="flex flex-wrap items-center justify-between gap-2 px-3 py-3 text-sm">
@@ -360,6 +376,23 @@ async function ProjectContent({ params }: { params: Promise<{ projectId: string 
                   <Label htmlFor="description">Description</Label>
                   <Textarea id="description" name="description" defaultValue={project.description} className="mt-1" />
                 </div>
+                {products.length > 0 ? (
+                  <div className="md:col-span-2">
+                    <Label htmlFor="productId">Product</Label>
+                    <MenuSelect
+                      id="productId"
+                      name="productId"
+                      defaultValue={project.product_id}
+                      className="mt-1"
+                      aria-label="Product"
+                      required
+                      options={products.map((product) => ({
+                        value: product.id,
+                        label: product.name,
+                      }))}
+                    />
+                  </div>
+                ) : null}
                 <Button type="submit">Save project</Button>
               </form>
             ) : null}

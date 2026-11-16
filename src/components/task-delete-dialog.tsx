@@ -56,15 +56,15 @@ export function TaskDeleteDialog({
   }, [hasRemoteTasks]);
 
   const countLabel = useMemo(() => {
-    if (ids.length === 1) return "this task";
-    return `${ids.length} tasks`;
+    if (ids.length === 1) return "this issue";
+    return `${ids.length} issues`;
   }, [ids.length]);
 
   function openDialog() {
     if (onBeforeOpen) {
       const next = onBeforeOpen();
       if (!next || next.ids.length === 0) {
-        setSelectionError("Select at least one task to delete");
+        setSelectionError("Select at least one issue to delete");
         setIds([]);
         setRemote(false);
         setOpen(true);
@@ -156,7 +156,7 @@ export function TaskDeleteDialog({
             </label>
           ) : (
             <p className="text-sm text-muted">
-              These tasks are only in Atrium, so nothing will change in external trackers.
+              These issues are only in Atrium, so nothing will change in external trackers.
             </p>
           )}
 

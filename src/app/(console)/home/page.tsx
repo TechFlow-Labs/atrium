@@ -92,7 +92,7 @@ async function HomeContent({
             <h1 className="text-4xl">{current.name}</h1>
           </div>
           <p className="mt-2 max-w-2xl text-sm text-muted">
-            Workspace dashboard — open counts jump into filtered task lists, schedule, projects, and sync.
+            Workspace dashboard — open counts jump into filtered issue lists, schedule, projects, and sync.
           </p>
         </div>
         <div className="flex flex-wrap items-center justify-end gap-2">
@@ -100,7 +100,7 @@ async function HomeContent({
             items={[
               {
                 href: `/tasks${source ? `?source=${encodeURIComponent(source)}` : ""}`,
-                label: "All tasks",
+                label: "All issues",
                 icon: "ListTodo",
               },
               {
@@ -206,7 +206,7 @@ async function HomeContent({
         <Panel
           title="Blocked"
           href={blockedHref}
-          empty="No blocked tasks."
+          empty="No blocked issues."
           count={feed.stats.blocked}
         >
           {feed.blocked.map((task) => (

@@ -86,7 +86,7 @@ export function TaskBulkActions({
         <Checkbox
           checked={selectState}
           onCheckedChange={(value) => setAllSelected(value === true)}
-          aria-label="Select all tasks"
+          aria-label="Select all issues"
         />
         <span>Select all</span>
       </label>

@@ -86,10 +86,22 @@ export const APP_TOUR: ScreenGuide = {
       body: "Projects group related tasks. Native projects are edited here. Provider-linked projects mirror issues from Linear, Jira, GitHub, GitLab, or Gitea.",
     },
     {
+      href: "/products",
+      target: "products-board",
+      title: "Products",
+      body: "Products sit between a workspace and its projects. Review portfolio stats here, or switch to All workspaces to compare every workspace you belong to.",
+    },
+    {
+      href: "/products",
+      target: "product-stats",
+      title: "Product stats",
+      body: "Counts for products, projects, attention, and completion. Each tile links into the matching list.",
+    },
+    {
       href: "/tasks",
       target: "task-filters",
-      title: "Tasks",
-      body: "Search and filter every task you can see across the workspace.",
+      title: "Issues",
+      body: "Search and filter every issue you can see across the workspace.",
     },
     {
       href: "/tasks",
@@ -197,8 +209,8 @@ export const GUIDES = {
       },
       {
         target: "project-updates",
-        title: "Recent tasks",
-        body: "The latest changes across this project's tasks.",
+        title: "Recent issues",
+        body: "The latest changes across this project's issues.",
       },
       {
         target: "project-manage",
@@ -209,24 +221,24 @@ export const GUIDES = {
   },
   tasks: {
     id: "tasks",
-    version: 2,
-    title: "Tasks",
-    intro: "Every task you can see across your workspace.",
+    version: 3,
+    title: "Issues",
+    intro: "Every issue you can see across your workspace.",
     tour: [
       {
         target: "task-filters",
-        title: "Find tasks",
+        title: "Find issues",
         body: "Search by text, then narrow the list by status, priority, project, and source.",
       },
       {
         target: "task-view",
         title: "List and board",
-        body: "Switch between a list and a board. The board groups tasks into columns by status.",
+        body: "Switch between a list and a board. The board groups issues into columns by status.",
       },
       {
         target: "new-task",
-        title: "New task",
-        body: "Create a task on a native project.",
+        title: "New issue",
+        body: "Create an issue on a native project.",
       },
       {
         target: "task-bulk",

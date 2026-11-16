@@ -48,7 +48,7 @@ export default function TasksPage({
       <Suspense fallback={<ScreenLoader className="min-h-0 flex-1" />}>
         <TasksShell>
           <div className="flex min-h-0 flex-1 flex-col">
-            <Suspense fallback={<ResultsLoader label="Updating tasks" />}>
+            <Suspense fallback={<ResultsLoader label="Updating issues" />}>
               <TasksResults searchParams={searchParams} />
             </Suspense>
           </div>
@@ -106,9 +106,9 @@ async function TasksShell({ children }: { children: React.ReactNode }) {
           groupRelatedTasks={groupRelatedTasks}
           heading={
             <>
-              <h1 className="text-4xl">Tasks</h1>
+              <h1 className="text-4xl">Issues</h1>
               <p className="mt-1 text-sm text-muted">
-                Native tasks are edited here. Provider tasks show their source and only offer actions that provider supports.
+                Native issues are edited here. Provider issues show their source and only offer actions that provider supports.
               </p>
             </>
           }
@@ -171,7 +171,7 @@ async function TasksResults({
       <div className="flex min-h-0 flex-1 flex-col">
         <EmptyResults
           icon={ListFilter}
-          title="No tasks match"
+          title="No issues match"
           description="Create one on a native project, or widen the filters."
         />
       </div>

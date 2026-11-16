@@ -3,10 +3,13 @@ import { writeAudit } from "../audit";
 import { requireAction } from "../authz/membership";
 import { withUser } from "../db/client";
 import { areDevMocksVisible, sqlDevMockProjectVisible } from "../dev/mock-data";
+import { resolveProductId } from "../products/service";
 
 export type ProjectRecord = {
   id: string;
   workspace_id: string;
+  product_id: string;
+  product_name: string | null;
   name: string;
   nickname: string | null;
   description: string;
@@ -32,23 +35,28 @@ function normalizeNickname(value: string | null): string | null {
 export async function listProjects(
   userId: string,
   workspaceId: string,
-  filter: { status?: "active" | "archived" | "all"; query?: string } = {},
+  filter: { status?: "active" | "archived" | "all"; query?: string; productId?: string } = {},
 ): Promise<ProjectRecord[]> {
   const showMocks = await areDevMocksVisible();
   return withUser(userId, async (tx) => {
     await requireAction(tx, workspaceId, "task.read");
     const status = filter.status ?? "active";
     const query = filter.query?.trim() ?? "";
+    // Null — not "" — so Postgres never casts an empty string to uuid.
+    const productId = filter.productId?.trim() || null;
     return tx.execute<ProjectRecord>(sql`
-      select p.id, p.workspace_id, p.name, p.nickname, p.description, p.status, p.ownership_mode,
+      select p.id, p.workspace_id, p.product_id, prod.name as product_name,
+             p.name, p.nickname, p.description, p.status, p.ownership_mode,
              p.archived_at, p.created_at,
              i.provider, c.provider_project_name, c.provider_project_url, c.provider_project_id,
              c.integration_id, c.publish_outbound
       from projects p
+      left join products prod on prod.id = p.product_id
       left join project_connections c on c.project_id = p.id
       left join integrations i on i.id = c.integration_id
       where p.workspace_id = ${workspaceId}::uuid
         and (${status} = 'all' or p.status = ${status})
+        and (${productId}::uuid is null or p.product_id = ${productId}::uuid)
         and (
           ${query} = ''
           or p.name ilike ${"%" + query + "%"}
@@ -248,11 +256,13 @@ export async function getProject(userId: string, workspaceId: string, projectId:
   return withUser(userId, async (tx) => {
     await requireAction(tx, workspaceId, "task.read");
     const rows = await tx.execute<ProjectRecord>(sql`
-      select p.id, p.workspace_id, p.name, p.nickname, p.description, p.status, p.ownership_mode,
+      select p.id, p.workspace_id, p.product_id, prod.name as product_name,
+             p.name, p.nickname, p.description, p.status, p.ownership_mode,
              p.archived_at, p.created_at,
              i.provider, c.provider_project_name, c.provider_project_url, c.provider_project_id,
              c.integration_id, c.publish_outbound
       from projects p
+      left join products prod on prod.id = p.product_id
       left join project_connections c on c.project_id = p.id
       left join integrations i on i.id = c.integration_id
       where p.workspace_id = ${workspaceId}::uuid and p.id = ${projectId}::uuid
@@ -264,20 +274,28 @@ export async function getProject(userId: string, workspaceId: string, projectId:
 export async function createNativeProject(
   userId: string,
   workspaceId: string,
-  input: { name: string; description?: string },
+  input: { name: string; description?: string; productId?: string | null },
 ): Promise<string> {
   const name = input.name.trim();
   if (name.length < 2 || name.length > 120) throw new Error("Project name must be between 2 and 120 characters");
   return withUser(userId, async (tx) => {
     await requireAction(tx, workspaceId, "project.create");
+    const productId = await resolveProductId(tx, workspaceId, input.productId);
     const rows = await tx.execute<{ id: string }>(sql`
-      insert into projects (workspace_id, name, description, ownership_mode, created_by)
-      values (${workspaceId}::uuid, ${name}, ${input.description?.trim() ?? ""}, 'native', current_setting('app.current_user_id', true))
+      insert into projects (workspace_id, product_id, name, description, ownership_mode, created_by)
+      values (
+        ${workspaceId}::uuid,
+        ${productId}::uuid,
+        ${name},
+        ${input.description?.trim() ?? ""},
+        'native',
+        current_setting('app.current_user_id', true)
+      )
       returning id
     `);
     const id = rows[0]?.id;
     if (!id) throw new Error("Project was not created");
-    await writeAudit(tx, { workspaceId, action: "project.created", entityType: "project", entityId: id, metadata: { ownership: "native" } });
+    await writeAudit(tx, { workspaceId, action: "project.created", entityType: "project", entityId: id, metadata: { ownership: "native", productId } });
     return id;
   });
 }
@@ -286,7 +304,7 @@ export async function updateProject(
   userId: string,
   workspaceId: string,
   projectId: string,
-  input: { name?: string; nickname?: string | null; description?: string },
+  input: { name?: string; nickname?: string | null; description?: string; productId?: string | null },
 ): Promise<void> {
   await withUser(userId, async (tx) => {
     await requireAction(tx, workspaceId, "project.update");
@@ -296,11 +314,16 @@ export async function updateProject(
     }
     const nicknameProvided = input.nickname !== undefined;
     const nickname = nicknameProvided ? normalizeNickname(input.nickname ?? null) : null;
+    const productProvided = input.productId !== undefined;
+    const productId = productProvided
+      ? await resolveProductId(tx, workspaceId, input.productId)
+      : null;
     const rows = await tx.execute(sql`
       update projects
       set name = coalesce(${name ?? null}, name),
           nickname = case when ${nicknameProvided} then ${nickname} else nickname end,
-          description = coalesce(${input.description ?? null}, description)
+          description = coalesce(${input.description ?? null}, description),
+          product_id = case when ${productProvided} then ${productId}::uuid else product_id end
       where id = ${projectId}::uuid and workspace_id = ${workspaceId}::uuid
       returning id
     `);

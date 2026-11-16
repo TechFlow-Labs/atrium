@@ -32,6 +32,12 @@ import {
   listProjects,
   updateProject,
 } from "@/server/projects/service";
+import {
+  archiveProduct,
+  createProduct,
+  deleteProduct,
+  updateProduct,
+} from "@/server/products/service";
 import { addTaskComment } from "@/server/tasks/comments";
 import { addTaskLink, removeTaskLink, searchTasksForLink } from "@/server/tasks/links";
 import { bulkUpdateTasks, createTask, deleteTasks, transferTasks, updateTask } from "@/server/tasks/service";
@@ -215,12 +221,13 @@ export async function logoutAction(): Promise<void> {
 
 export async function switchWorkspaceAction(formData: FormData): Promise<void> {
   const id = String(formData.get("workspaceId") ?? "");
+  const returnTo = String(formData.get("returnTo") ?? "").trim();
   const user = await userId();
   const { listWorkspaces } = await import("@/server/workspaces/service");
   const workspaces = await listWorkspaces(user);
   if (!workspaces.some((workspace) => workspace.id === id)) throw new Error("Workspace not found");
   (await cookies()).set("atrium_workspace", id, { httpOnly: true, sameSite: "lax", path: "/", secure: process.env.NODE_ENV === "production" });
-  redirect("/home");
+  redirect(returnTo.startsWith("/") ? returnTo : "/home");
 }
 
 export async function createWorkspaceAction(_state: ActionState, formData: FormData): Promise<ActionState> {
@@ -318,11 +325,56 @@ export async function removeMemberAction(formData: FormData): Promise<void> {
   redirect("/workspaces");
 }
 
+export async function createProductAction(_state: ActionState, formData: FormData): Promise<ActionState> {
+  try {
+    const id = await createProduct(await userId(), String(formData.get("workspaceId")), {
+      name: String(formData.get("name") ?? ""),
+      description: String(formData.get("description") ?? ""),
+    });
+    revalidatePath("/products");
+    redirect(`/products/${id}`);
+  } catch (error) {
+    unstable_rethrow(error);
+    return { error: error instanceof Error ? error.message : "Could not create the product" };
+  }
+}
+
+export async function updateProductAction(formData: FormData): Promise<void> {
+  const productId = String(formData.get("productId"));
+  await updateProduct(await userId(), String(formData.get("workspaceId")), productId, {
+    name: formData.has("name") ? String(formData.get("name") ?? "") : undefined,
+    description: formData.has("description") ? String(formData.get("description") ?? "") : undefined,
+  });
+  revalidatePath("/products");
+  revalidatePath(`/products/${productId}`);
+  redirect(`/products/${productId}`);
+}
+
+export async function archiveProductAction(formData: FormData): Promise<void> {
+  await archiveProduct(
+    await userId(),
+    String(formData.get("workspaceId")),
+    String(formData.get("productId")),
+    formData.get("archived") === "true",
+  );
+  redirect("/products");
+}
+
+export async function deleteProductAction(formData: FormData): Promise<void> {
+  const workspaceId = String(formData.get("workspaceId") ?? "");
+  const productId = String(formData.get("productId") ?? "");
+  await deleteProduct(await userId(), workspaceId, productId);
+  revalidatePath("/products");
+  revalidatePath("/projects");
+  redirect("/products");
+}
+
 export async function createProjectAction(_state: ActionState, formData: FormData): Promise<ActionState> {
   try {
     await createNativeProject(await userId(), String(formData.get("workspaceId")), {
       name: String(formData.get("name") ?? ""),
       description: String(formData.get("description") ?? ""),
+      productId: String(formData.get("productId") ?? "") || null,
     });
   } catch (error) {
     unstable_rethrow(error);
@@ -338,6 +390,7 @@ export async function updateProjectAction(formData: FormData): Promise<void> {
     name: formData.has("name") ? String(formData.get("name") ?? "") : undefined,
     nickname: formData.has("nickname") ? String(formData.get("nickname") ?? "") : undefined,
     description: formData.has("description") ? String(formData.get("description") ?? "") : undefined,
+    productId: formData.has("productId") ? String(formData.get("productId") ?? "") || null : undefined,
   });
   redirect(returnTo || `/projects/${projectId}`);
 }
@@ -679,6 +732,7 @@ export async function linkProjectAction(_state: ActionState, formData: FormData)
       name: String(formData.get("name") ?? ""),
       key: String(formData.get("key") ?? "") || null,
       url: String(formData.get("url") ?? "") || null,
+      productId: String(formData.get("productId") ?? "") || null,
     });
   } catch (error) {
     unstable_rethrow(error);
