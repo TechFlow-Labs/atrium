@@ -49,10 +49,12 @@ export function CalendarMonthNav({
   monthKey,
   label,
   view = "month",
+  onNavigate,
 }: {
   monthKey: string;
   label: string;
   view?: CalendarView;
+  onNavigate?: (href: string, nextMonthKey: string) => void;
 }) {
   const router = useRouter();
   const menu = useHoverMenu();
@@ -64,7 +66,12 @@ export function CalendarMonthNav({
 
   function goTo(nextKey: string) {
     menu.onOpenChange(false);
-    router.push(calendarMonthHref(nextKey, todayKey, view));
+    const href = calendarMonthHref(nextKey, todayKey, view);
+    if (onNavigate) {
+      onNavigate(href, nextKey);
+      return;
+    }
+    router.push(href);
   }
 
   function openPicker(open: boolean) {

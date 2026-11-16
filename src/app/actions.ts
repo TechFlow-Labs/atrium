@@ -40,7 +40,11 @@ import {
 } from "@/server/products/service";
 import { addTaskComment } from "@/server/tasks/comments";
 import { addTaskLink, removeTaskLink, searchTasksForLink } from "@/server/tasks/links";
+import { loadProductsPanel, type ProductsPanelFilter } from "@/server/products/panel";
+import { loadProjectsPanel, type ProjectsPanelFilter } from "@/server/projects/panel";
+import { loadTasksPanel, type TasksPanelFilter } from "@/server/tasks/panel";
 import { bulkUpdateTasks, createTask, deleteTasks, transferTasks, updateTask } from "@/server/tasks/service";
+import { calendarTasks, homeFeed } from "@/server/home/service";
 import {
   addFakeRemoteProject,
   beginOAuth,
@@ -429,6 +433,116 @@ export async function createMilestoneAction(formData: FormData): Promise<void> {
     dueAt: String(formData.get("dueAt") ?? "") || null,
   });
   redirect(`/projects/${formData.get("projectId")}`);
+}
+
+export async function loadTasksPanelAction(
+  workspaceId: string,
+  filter: TasksPanelFilter = {},
+) {
+  const user = await getSessionUser();
+  if (!user) return { error: "Sign in to continue" } as const;
+  const { current } = await workspaceContext(user.id);
+  if (current.id !== workspaceId) return { error: "Workspace not found" } as const;
+  try {
+    return await loadTasksPanel(user.id, workspaceId, current.role, filter);
+  } catch (error) {
+    unstable_rethrow(error);
+    return { error: error instanceof Error ? error.message : "Could not load issues" } as const;
+  }
+}
+
+export async function loadProjectsPanelAction(
+  workspaceId: string,
+  filter: ProjectsPanelFilter = {},
+) {
+  const user = await getSessionUser();
+  if (!user) return { error: "Sign in to continue" } as const;
+  const { current } = await workspaceContext(user.id);
+  if (current.id !== workspaceId) return { error: "Workspace not found" } as const;
+  try {
+    return await loadProjectsPanel(user.id, workspaceId, filter, Date.now());
+  } catch (error) {
+    unstable_rethrow(error);
+    return { error: error instanceof Error ? error.message : "Could not load projects" } as const;
+  }
+}
+
+export async function loadProductsPanelAction(
+  workspaceId: string,
+  filter: ProductsPanelFilter = {},
+) {
+  const user = await getSessionUser();
+  if (!user) return { error: "Sign in to continue" } as const;
+  const { current } = await workspaceContext(user.id);
+  if (current.id !== workspaceId) return { error: "Workspace not found" } as const;
+  try {
+    return await loadProductsPanel(user.id, workspaceId, filter, Date.now());
+  } catch (error) {
+    unstable_rethrow(error);
+    return { error: error instanceof Error ? error.message : "Could not load products" } as const;
+  }
+}
+
+export async function loadHomeFeedAction(workspaceId: string, source?: string) {
+  const user = await getSessionUser();
+  if (!user) return { error: "Sign in to continue" } as const;
+  const { current } = await workspaceContext(user.id);
+  if (current.id !== workspaceId) return { error: "Workspace not found" } as const;
+  try {
+    const feed = await homeFeed(user.id, workspaceId, Date.now(), source);
+    return { feed, role: current.role } as const;
+  } catch (error) {
+    unstable_rethrow(error);
+    return { error: error instanceof Error ? error.message : "Could not load home" } as const;
+  }
+}
+
+export async function loadSchedulePanelAction(
+  workspaceId: string,
+  input: { month?: string; view?: string } = {},
+) {
+  const user = await getSessionUser();
+  if (!user) return { error: "Sign in to continue" } as const;
+  const { current } = await workspaceContext(user.id);
+  if (current.id !== workspaceId) return { error: "Workspace not found" } as const;
+  try {
+    const { parseCalendarView, toMonthKey } = await import("@/lib/calendar-month");
+    const view = parseCalendarView(input.view);
+    const monthParam = input.month;
+    const anchor =
+      monthParam && /^\d{4}-\d{2}$/.test(monthParam)
+        ? (() => {
+            const [year, month] = monthParam.split("-").map(Number);
+            return new Date(Date.UTC(year!, (month ?? 1) - 1, 1));
+          })()
+        : new Date();
+    const start = new Date(Date.UTC(anchor.getUTCFullYear(), anchor.getUTCMonth(), 1));
+    const end = new Date(Date.UTC(anchor.getUTCFullYear(), anchor.getUTCMonth() + 1, 1));
+    const monthKey = toMonthKey(start);
+    const taskRows = await calendarTasks(user.id, workspaceId, start.toISOString(), end.toISOString());
+    return {
+      view,
+      monthKey,
+      startIso: start.toISOString(),
+      endIso: end.toISOString(),
+      label: new Intl.DateTimeFormat("en", { month: "long", year: "numeric", timeZone: "UTC" }).format(start),
+      tasks: taskRows.map((row) => ({
+        id: String(row.id),
+        title: String(row.title),
+        due_at: row.due_at instanceof Date ? row.due_at.toISOString() : String(row.due_at),
+        created_at: row.created_at instanceof Date ? row.created_at.toISOString() : String(row.created_at),
+        status: String(row.status),
+        priority: String(row.priority),
+        provider: (row.provider as string | null) ?? null,
+        project_id: String(row.project_id),
+        project_name: String(row.project_name),
+        project_nickname: (row.project_nickname as string | null) ?? null,
+      })),
+    } as const;
+  } catch (error) {
+    unstable_rethrow(error);
+    return { error: error instanceof Error ? error.message : "Could not load schedule" } as const;
+  }
 }
 
 export async function createTaskAction(_state: ActionState, formData: FormData): Promise<ActionState> {

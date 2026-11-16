@@ -1,46 +1,33 @@
-import Link from "next/link";
+"use client";
+
 import { CalendarDays, GanttChart } from "lucide-react";
+import { SoftSegmentedNav } from "@/components/soft-segmented-nav";
 import { calendarMonthHref, type CalendarView } from "@/lib/calendar-month";
-import { cn } from "@/lib/utils";
+import { softReplaceUrl } from "@/lib/soft-nav";
 
 export function CalendarViewToggle({
   monthKey,
   todayKey,
   view,
+  onChange,
 }: {
   monthKey: string;
   todayKey: string;
   view: CalendarView;
+  onChange?: (view: CalendarView) => void;
 }) {
   return (
-    <nav
-      className="flex items-center gap-1 rounded-md border bg-card p-0.5 text-sm"
+    <SoftSegmentedNav
       aria-label="Schedule views"
-    >
-      {(
-        [
-          { value: "month" as const, label: "Month", icon: CalendarDays },
-          { value: "timeline" as const, label: "Timeline", icon: GanttChart },
-        ] as const
-      ).map(({ value, label, icon: Icon }) => {
-        const active = view === value;
-        return (
-          <Link
-            key={value}
-            href={calendarMonthHref(monthKey, todayKey, value)}
-            aria-current={active ? "page" : undefined}
-            className={cn(
-              "inline-flex items-center gap-1.5 rounded px-2.5 py-1.5 transition",
-              active
-                ? "bg-foreground text-background"
-                : "text-muted hover:bg-accent hover:text-foreground",
-            )}
-          >
-            <Icon className="size-3.5" aria-hidden="true" />
-            {label}
-          </Link>
-        );
-      })}
-    </nav>
+      value={view}
+      onChange={(next) => {
+        softReplaceUrl(calendarMonthHref(monthKey, todayKey, next));
+        onChange?.(next);
+      }}
+      options={[
+        { value: "month", label: "Month", icon: CalendarDays },
+        { value: "timeline", label: "Timeline", icon: GanttChart },
+      ]}
+    />
   );
 }

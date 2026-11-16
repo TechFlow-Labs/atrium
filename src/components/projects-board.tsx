@@ -615,8 +615,9 @@ export function ProjectsBoard({
       ) : null}
 
       <div
+        data-projects-body=""
         data-layout-list={editing ? "section" : undefined}
-        className="flex flex-col gap-8"
+        className="flex flex-col gap-8 transition-opacity duration-150"
       >
         {visibleSections.map((section) => {
           const hidden = Boolean(section.hidden);

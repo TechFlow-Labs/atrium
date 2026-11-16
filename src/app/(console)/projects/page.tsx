@@ -1,24 +1,21 @@
 import { Suspense } from "react";
 import { ScreenLoader } from "@/components/screen-loader";
-import Link from "next/link";
 import { connection } from "next/server";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { Archive, CircleDot, Layers } from "lucide-react";
 import { createProjectAction } from "@/app/actions";
-import { ProjectsBoard } from "@/components/projects-board";
+import { ProjectsPageClient } from "@/components/projects-page-client";
 import { getSessionUser } from "@/server/auth/session";
 import { workspaceContext } from "@/server/auth/workspace";
 import { listIntegrations } from "@/server/integrations/service";
 import { isTaskProvider } from "@/server/integrations/types";
 import { listProducts } from "@/server/products/service";
-import { getProjectsAnalytics, listProjects } from "@/server/projects/service";
+import { loadProjectsPanel } from "@/server/projects/panel";
 import {
   DEFAULT_PROJECTS_LAYOUT,
   parseProjectsLayout,
   parseProjectsLayoutCookie,
 } from "@/lib/projects-layout";
-import { cn } from "@/lib/utils";
 import { withUser } from "@/server/db/client";
 import { sql } from "drizzle-orm";
 
@@ -42,9 +39,8 @@ async function ProjectsContent({ searchParams }: { searchParams: Promise<{ statu
   // eslint-disable-next-line react-hooks/purity -- connection() already opted this request out of prerender
   const now = Date.now();
   const cookieStore = await cookies();
-  const [projects, analytics, prefRows, integrations, products] = await Promise.all([
-    listProjects(user.id, current.id, { status, query: params.q }),
-    getProjectsAnalytics(user.id, current.id, { status }, now),
+  const [panel, prefRows, integrations, products] = await Promise.all([
+    loadProjectsPanel(user.id, current.id, { status, query: params.q }, now),
     withUser(user.id, (tx) =>
       tx.execute<{ projects_layout: unknown }>(sql`
         select projects_layout from user_preferences
@@ -68,59 +64,22 @@ async function ProjectsContent({ searchParams }: { searchParams: Promise<{ statu
       displayName: integration.display_name,
     }));
   const productOptions = products.map((product) => ({ id: product.id, name: product.name }));
-  const scopeLabel =
-    status === "archived" ? "archived projects" : status === "all" ? "all projects" : "active projects";
   const layout =
     parseProjectsLayoutCookie(cookieStore.get("atrium_projects_layout")?.value) ??
     (prefRows[0]?.projects_layout != null
       ? parseProjectsLayout(prefRows[0].projects_layout)
       : DEFAULT_PROJECTS_LAYOUT);
 
-  const statusNav = (
-    <nav data-tour="project-status" className="flex items-center gap-1 rounded-md border bg-card p-0.5 text-sm" aria-label="Project status">
-      {(
-        [
-          { href: "/projects", value: "active", label: "Active", icon: CircleDot },
-          { href: "/projects?status=archived", value: "archived", label: "Archived", icon: Archive },
-          { href: "/projects?status=all", value: "all", label: "All", icon: Layers },
-        ] as const
-      ).map(({ href, value, label, icon: Icon }) => {
-        const active = status === value;
-        return (
-          <Link
-            key={value}
-            href={href}
-            aria-current={active ? "page" : undefined}
-            className={cn(
-              "inline-flex items-center gap-1.5 rounded px-2.5 py-1.5 transition",
-              active
-                ? "bg-foreground text-background"
-                : "text-muted hover:bg-accent hover:text-foreground",
-            )}
-          >
-            <Icon className="size-3.5" aria-hidden="true" />
-            {label}
-          </Link>
-        );
-      })}
-    </nav>
-  );
-
   return (
-    <ProjectsBoard
-      initialLayout={layout}
+    <ProjectsPageClient
       workspaceId={current.id}
       workspaceName={current.name}
-      scopeLabel={scopeLabel}
       canWrite={canWrite}
       createAction={createProjectAction}
       integrations={linkableIntegrations}
       products={productOptions}
-      statusNav={statusNav}
-      portfolio={analytics.portfolio}
-      taskStats={analytics.tasks}
-      busiest={analytics.busiest}
-      projects={projects}
+      initialLayout={layout}
+      initial={panel}
     />
   );
 }

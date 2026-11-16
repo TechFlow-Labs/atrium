@@ -1,35 +1,28 @@
 import { Suspense } from "react";
 import { ScreenLoader } from "@/components/screen-loader";
-import { EmptyResults } from "@/components/empty-results";
 import { ResultsLoader } from "@/components/results-loader";
 import { connection } from "next/server";
-import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { ListFilter } from "lucide-react";
-import { sql } from "drizzle-orm";
-import { bulkTaskAction, createTaskAction } from "@/app/actions";
-import { TaskBoard } from "@/components/task-board";
+import { createTaskAction } from "@/app/actions";
 import { TaskForm } from "@/components/task-form";
-import { TaskList } from "@/components/task-list";
 import { TasksFilterFrame } from "@/components/tasks-filter-frame";
-import { TASK_BULK_FORM_ID } from "@/components/task-bulk-actions";
-import { parseMotionEnabled } from "@/lib/apply-theme";
+import { TasksResultsPanel } from "@/components/tasks-results-panel";
 import { getSessionUser } from "@/server/auth/session";
 import { workspaceContext } from "@/server/auth/workspace";
-import { withUser } from "@/server/db/client";
 import { listIntegrations } from "@/server/integrations/service";
 import { getAdapter } from "@/server/integrations/registry";
 import { isTaskProvider } from "@/server/integrations/types";
-import { relatedGroupIds } from "@/lib/task-link-groups";
+import { listProducts } from "@/server/products/service";
 import { listProjects } from "@/server/projects/service";
-import { listTaskLinkEdgesForTasks } from "@/server/tasks/links";
-import { listTasks } from "@/server/tasks/service";
+import { loadTasksPanel } from "@/server/tasks/panel";
+import { tasksDataQueryKey, type FilterValues } from "@/lib/task-filters";
 
 export const instant = false;
 
 type TasksSearchParams = {
   status?: string;
   priority?: string;
+  product?: string;
   project?: string;
   source?: string;
   q?: string;
@@ -46,43 +39,50 @@ export default function TasksPage({
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <Suspense fallback={<ScreenLoader className="min-h-0 flex-1" />}>
-        <TasksShell>
-          <div className="flex min-h-0 flex-1 flex-col">
-            <Suspense fallback={<ResultsLoader label="Updating issues" />}>
-              <TasksResults searchParams={searchParams} />
-            </Suspense>
-          </div>
-        </TasksShell>
+        <TasksContent searchParams={searchParams} />
       </Suspense>
     </div>
   );
 }
 
-async function TasksShell({ children }: { children: React.ReactNode }) {
+async function TasksContent({
+  searchParams,
+}: {
+  searchParams: Promise<TasksSearchParams>;
+}) {
   await connection();
   const user = await getSessionUser();
   if (!user) redirect("/login");
+  const params = await searchParams;
   const { current } = await workspaceContext(user.id);
-  const cookieStore = await cookies();
-  const [projects, integrations, prefs] = await Promise.all([
+
+  const [projects, products, integrations, panel] = await Promise.all([
     listProjects(user.id, current.id, { status: "active" }),
+    listProducts(user.id, current.id, { status: "active" }),
     listIntegrations(user.id, current.id),
-    withUser(user.id, (tx) =>
-      tx.execute<{ group_related_tasks: boolean }>(sql`
-        select group_related_tasks from user_preferences
-        where user_id = current_setting('app.current_user_id', true)
-      `),
-    ),
+    loadTasksPanel(user.id, current.id, current.role, {
+      status: params.status,
+      priority: params.priority,
+      product: params.product,
+      project: params.project,
+      source: params.source,
+      q: params.q,
+      dueBefore: params.dueBefore,
+      dueAfter: params.dueAfter,
+    }),
   ]);
+
   const canWrite = current.role !== "viewer";
-  const groupRelatedTasks = prefs[0]
-    ? prefs[0].group_related_tasks !== false
-    : parseMotionEnabled(cookieStore.get("atrium_group_related_tasks")?.value);
   const projectOptions = projects.map((project) => ({
     id: project.id,
     name: project.nickname?.trim() || project.name,
+    productId: project.product_id,
     provider: project.provider,
     ownershipMode: project.ownership_mode,
+  }));
+  const productOptions = products.map((product) => ({
+    id: product.id,
+    name: product.name,
   }));
   const syncIntegrations = integrations
     .filter((integration) => {
@@ -96,19 +96,35 @@ async function TasksShell({ children }: { children: React.ReactNode }) {
       displayName: integration.display_name,
     }));
 
+  const initialValues: FilterValues = {
+    status: params.status,
+    priority: params.priority,
+    product: params.product,
+    project: params.project,
+    source: params.source,
+    q: params.q,
+    view: params.view,
+    dueBefore: params.dueBefore,
+    dueAfter: params.dueAfter,
+  };
+  const initialQueryKey = tasksDataQueryKey(initialValues);
+
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <Suspense fallback={<ResultsLoader label="Loading filters" />}>
         <TasksFilterFrame
           workspaceId={current.id}
           projects={projectOptions}
+          products={productOptions}
           canWrite={canWrite}
-          groupRelatedTasks={groupRelatedTasks}
+          groupRelatedTasks={panel.groupRelatedTasks}
+          initialValues={initialValues}
           heading={
             <>
               <h1 className="text-4xl">Issues</h1>
               <p className="mt-1 text-sm text-muted">
-                Native issues are edited here. Provider issues show their source and only offer actions that provider supports.
+                Native issues are edited here. Provider issues show their source and only offer actions that
+                provider supports.
               </p>
             </>
           }
@@ -125,109 +141,13 @@ async function TasksShell({ children }: { children: React.ReactNode }) {
             ) : null
           }
         >
-          {children}
+          <TasksResultsPanel
+            workspaceId={current.id}
+            initial={panel}
+            initialQueryKey={initialQueryKey}
+          />
         </TasksFilterFrame>
       </Suspense>
     </div>
-  );
-}
-
-async function TasksResults({
-  searchParams,
-}: {
-  searchParams: Promise<TasksSearchParams>;
-}) {
-  await connection();
-  const user = await getSessionUser();
-  if (!user) redirect("/login");
-  const params = await searchParams;
-  const { current } = await workspaceContext(user.id);
-  const canWrite = current.role !== "viewer";
-  const cookieStore = await cookies();
-  const prefs = await withUser(user.id, (tx) =>
-    tx.execute<{ provider_tile_styles: boolean; group_related_tasks: boolean }>(sql`
-      select provider_tile_styles, group_related_tasks from user_preferences
-      where user_id = current_setting('app.current_user_id', true)
-    `),
-  );
-  const providerTileStyles = prefs[0]
-    ? prefs[0].provider_tile_styles !== false
-    : parseMotionEnabled(cookieStore.get("atrium_provider_tiles")?.value);
-  const groupRelatedTasks = prefs[0]
-    ? prefs[0].group_related_tasks !== false
-    : parseMotionEnabled(cookieStore.get("atrium_group_related_tasks")?.value);
-  const tasks = await listTasks(user.id, current.id, {
-    status: params.status,
-    priority: params.priority,
-    projectId: params.project,
-    source: params.source,
-    query: params.q,
-    dueBefore: params.dueBefore,
-    dueAfter: params.dueAfter,
-  });
-
-  if (tasks.length === 0) {
-    return (
-      <div className="flex min-h-0 flex-1 flex-col">
-        <EmptyResults
-          icon={ListFilter}
-          title="No issues match"
-          description="Create one on a native project, or widen the filters."
-        />
-      </div>
-    );
-  }
-
-  const linkEdges = groupRelatedTasks
-    ? await listTaskLinkEdgesForTasks(
-        user.id,
-        current.id,
-        tasks.map((task) => task.id),
-      )
-    : [];
-  const groupIdRecord = groupRelatedTasks
-    ? Object.fromEntries(relatedGroupIds(tasks.map((task) => task.id), linkEdges))
-    : {};
-
-  if (params.view === "board") {
-    return (
-      <TaskBoard
-        workspaceId={current.id}
-        tasks={tasks}
-        providerTileStyles={providerTileStyles}
-        relatedGroupIds={groupIdRecord}
-      />
-    );
-  }
-
-  return (
-    <form id={TASK_BULK_FORM_ID} action={bulkTaskAction} className="flex min-h-0 flex-1 flex-col gap-3">
-      <input type="hidden" name="workspaceId" value={current.id} />
-      <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto">
-        <TaskList
-          workspaceId={current.id}
-          canWrite={canWrite}
-          providerTileStyles={providerTileStyles}
-          groupRelated={groupRelatedTasks}
-          linkEdges={linkEdges}
-          tasks={tasks.map((task) => ({
-            id: task.id,
-            title: task.title,
-            description: task.description,
-            status: task.status,
-            priority: task.priority,
-            dueAt: task.due_at,
-            projectName: task.project_name,
-            assigneeLabel: task.assignee_label,
-            provider: task.provider,
-            externalUrl: task.external_url,
-            syncState: task.sync_state,
-          }))}
-        />
-      </div>
-      {!canWrite ? (
-        <p className="text-sm text-muted">Your role can view tasks. Members and above can edit them.</p>
-      ) : null}
-    </form>
   );
 }

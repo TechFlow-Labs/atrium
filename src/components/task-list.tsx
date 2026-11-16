@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowDown, ArrowUp, Link2 } from "lucide-react";
+import { useState } from "react";
+import { ArrowDown, ArrowUp, ChevronDown, FolderKanban, Link2 } from "lucide-react";
 import {
   ProviderIcon,
   providerAccents,
@@ -34,9 +35,30 @@ export type TaskListItem = {
   status: string;
   priority: string;
   dueAt: Date | string | null;
+  projectId?: string;
   projectName: string;
   assigneeLabel: string | null;
 };
+
+function groupTasksByProject(tasks: TaskListItem[]): Array<{
+  projectId: string;
+  projectName: string;
+  tasks: TaskListItem[];
+}> {
+  const groups: Array<{ projectId: string; projectName: string; tasks: TaskListItem[] }> = [];
+  const indexById = new Map<string, number>();
+  for (const task of tasks) {
+    const projectId = task.projectId || task.projectName || "unknown";
+    const existing = indexById.get(projectId);
+    if (existing == null) {
+      indexById.set(projectId, groups.length);
+      groups.push({ projectId, projectName: task.projectName || "Untitled project", tasks: [task] });
+      continue;
+    }
+    groups[existing]!.tasks.push(task);
+  }
+  return groups;
+}
 
 export function TaskList({
   tasks,
@@ -44,6 +66,7 @@ export function TaskList({
   workspaceId,
   providerTileStyles = true,
   groupRelated = true,
+  groupByProject = false,
   linkEdges = [],
 }: {
   tasks: TaskListItem[];
@@ -51,8 +74,29 @@ export function TaskList({
   workspaceId: string;
   providerTileStyles?: boolean;
   groupRelated?: boolean;
+  /** When filtering by product, cluster issues under each project. */
+  groupByProject?: boolean;
   linkEdges?: TaskLinkEdge[];
 }) {
+  if (groupByProject) {
+    const projectGroups = groupTasksByProject(tasks);
+    return (
+      <div className="space-y-4" data-reveal-items="">
+        {projectGroups.map((group) => (
+          <ProjectIssueGroup
+            key={group.projectId}
+            projectId={group.projectId}
+            projectName={group.projectName}
+            tasks={group.tasks}
+            canWrite={canWrite}
+            workspaceId={workspaceId}
+            providerTileStyles={providerTileStyles}
+          />
+        ))}
+      </div>
+    );
+  }
+
   if (!groupRelated || linkEdges.length === 0) {
     return (
       <ul className="divide-y overflow-hidden rounded-lg border bg-card" data-reveal-items="">
@@ -135,6 +179,97 @@ export function TaskList({
   );
 }
 
+function ProjectIssueGroup({
+  projectId,
+  projectName,
+  tasks,
+  canWrite,
+  workspaceId,
+  providerTileStyles,
+}: {
+  projectId: string;
+  projectName: string;
+  tasks: TaskListItem[];
+  canWrite: boolean;
+  workspaceId: string;
+  providerTileStyles: boolean;
+}) {
+  const [open, setOpen] = useState(true);
+  const panelId = `project-issues-${projectId}`;
+  const canOpenProject = /^[0-9a-f-]{36}$/i.test(projectId);
+
+  return (
+    <section
+      className="overflow-hidden rounded-lg border bg-card"
+      aria-label={`${projectName}: ${tasks.length} issues`}
+    >
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b bg-muted/20 px-2 py-1.5 sm:px-3">
+        <button
+          type="button"
+          aria-expanded={open}
+          aria-controls={panelId}
+          onClick={() => setOpen((value) => !value)}
+          className={cn(
+            "group flex min-w-0 flex-1 items-center gap-2 rounded-md px-1.5 py-1.5 text-left transition",
+            "hover:bg-accent/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+          )}
+        >
+          <ChevronDown
+            className={cn(
+              "size-4 shrink-0 text-muted transition-transform duration-200 ease-out motion-reduce:transition-none",
+              !open && "-rotate-90",
+            )}
+            aria-hidden="true"
+          />
+          <FolderKanban className="size-3.5 shrink-0 text-muted" aria-hidden="true" />
+          <div className="min-w-0">
+            <h2 className="truncate text-sm font-medium">{projectName}</h2>
+            <p className="text-xs text-muted">
+              {tasks.length} {tasks.length === 1 ? "issue" : "issues"}
+            </p>
+          </div>
+        </button>
+        {canOpenProject ? (
+          <Link
+            href={`/projects/${projectId}`}
+            className="shrink-0 px-2 text-xs font-medium text-muted transition hover:text-foreground hover:underline"
+            onClick={(event) => event.stopPropagation()}
+          >
+            Open project
+          </Link>
+        ) : null}
+      </div>
+      <div
+        id={panelId}
+        className={cn(
+          "grid transition-[grid-template-rows] duration-200 ease-out motion-reduce:transition-none",
+          open ? "grid-rows-[1fr]" : "grid-rows-[0fr]",
+        )}
+      >
+        <div className="min-h-0 overflow-hidden">
+          <ul
+            className={cn(
+              "divide-y transition-opacity duration-200 ease-out motion-reduce:transition-none",
+              open ? "opacity-100" : "opacity-0",
+            )}
+          >
+            {tasks.map((task) => (
+              <TaskListRow
+                key={task.id}
+                task={task}
+                canWrite={canWrite}
+                workspaceId={workspaceId}
+                providerTileStyles={providerTileStyles}
+                hideProjectBadge
+              />
+            ))}
+          </ul>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function RelationConnector({ relations }: { relations: RelationDescriptor[] }) {
   const summary = relations
     .map((relation) => `${relation.subject} ${relation.verb} ${relation.object}`)
@@ -170,6 +305,7 @@ function TaskListRow({
   providerTileStyles,
   related = false,
   relations,
+  hideProjectBadge = false,
 }: {
   task: TaskListItem;
   canWrite: boolean;
@@ -177,6 +313,7 @@ function TaskListRow({
   providerTileStyles: boolean;
   related?: boolean;
   relations?: RelationDescriptor[];
+  hideProjectBadge?: boolean;
 }) {
   const accent = providerTileStyles ? taskProviderAccent(task.provider) : null;
   const isRemote = Boolean(task.provider) || Boolean(task.externalUrl);
@@ -215,7 +352,7 @@ function TaskListRow({
             <span className="min-w-0">{task.title}</span>
           </p>
           <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-            <Badge tone="project">{task.projectName}</Badge>
+            {hideProjectBadge ? null : <Badge tone="project">{task.projectName}</Badge>}
             <Badge tone={task.assigneeLabel ? "due" : "none"}>
               {task.assigneeLabel || "Unassigned"}
             </Badge>

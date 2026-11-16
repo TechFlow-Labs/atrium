@@ -21,9 +21,11 @@ type SourceOption = {
 export function HomeSourceFilter({
   source,
   sources,
+  onChange,
 }: {
   source: string;
   sources: Array<{ provider: string; display_name: string }>;
+  onChange?: (source: string) => void;
 }) {
   const router = useRouter();
   const menu = useHoverMenu();
@@ -46,6 +48,10 @@ export function HomeSourceFilter({
 
   function choose(value: string) {
     menu.onOpenChange(false);
+    if (onChange) {
+      onChange(value);
+      return;
+    }
     router.push(homeHref(value || undefined));
   }
 

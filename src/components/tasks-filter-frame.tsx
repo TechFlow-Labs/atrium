@@ -1,54 +1,65 @@
 "use client";
 
-import { useRouter, useSearchParams } from "next/navigation";
-import { useMemo, useTransition, type ReactNode } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { GroupRelatedTasksToggle } from "@/components/group-related-tasks-toggle";
-import { ResultsLoader } from "@/components/results-loader";
+import { TasksFilterProvider } from "@/components/tasks-filter-context";
 import { TaskBulkActions } from "@/components/task-bulk-actions";
 import { TaskFilters, TaskViewToggle } from "@/components/task-filters";
+import {
+  buildTasksHref,
+  filterValuesFromSearchParams,
+  type FilterValues,
+} from "@/lib/task-filters";
 
-type ProjectOption = { id: string; name: string };
+type ProjectOption = { id: string; name: string; productId?: string };
+type ProductOption = { id: string; name: string };
+
+function valuesFromHref(href: string): FilterValues {
+  const url = new URL(href, typeof window === "undefined" ? "http://localhost" : window.location.origin);
+  return filterValuesFromSearchParams(url.searchParams);
+}
 
 export function TasksFilterFrame({
   workspaceId,
   projects,
+  products = [],
   heading,
   actions,
   canWrite = false,
   groupRelatedTasks = true,
+  initialValues,
   children,
 }: {
   workspaceId: string;
   projects: ProjectOption[];
+  products?: ProductOption[];
   heading: ReactNode;
   actions?: ReactNode;
   canWrite?: boolean;
   groupRelatedTasks?: boolean;
+  initialValues: FilterValues;
   children: ReactNode;
 }) {
-  const router = useRouter();
-  const searchParams = useSearchParams();
-  const [pending, startTransition] = useTransition();
+  const [values, setValues] = useState<FilterValues>(initialValues);
 
-  const values = useMemo(
-    () => ({
-      q: searchParams.get("q") ?? undefined,
-      status: searchParams.get("status") ?? undefined,
-      priority: searchParams.get("priority") ?? undefined,
-      project: searchParams.get("project") ?? undefined,
-      source: searchParams.get("source") ?? undefined,
-      view: searchParams.get("view") ?? undefined,
-      dueBefore: searchParams.get("dueBefore") ?? undefined,
-      dueAfter: searchParams.get("dueAfter") ?? undefined,
-    }),
-    [searchParams],
-  );
+  const syncUrl = useCallback((next: FilterValues) => {
+    const href = buildTasksHref(next);
+    window.history.replaceState(window.history.state, "", href);
+  }, []);
 
   function onNavigate(href: string) {
-    startTransition(() => {
-      router.replace(href, { scroll: false });
-    });
+    const next = valuesFromHref(href);
+    setValues(next);
+    syncUrl(next);
   }
+
+  useEffect(() => {
+    function onPopState() {
+      setValues(filterValuesFromSearchParams(new URLSearchParams(window.location.search)));
+    }
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
+  }, []);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-6">
@@ -70,8 +81,8 @@ export function TasksFilterFrame({
         <div data-reveal="" data-tour="task-filters">
           <TaskFilters
             projects={projects}
+            products={products}
             values={values}
-            pending={pending}
             onNavigate={onNavigate}
           />
         </div>
@@ -81,8 +92,8 @@ export function TasksFilterFrame({
           </div>
         ) : null}
       </div>
-      <div className="flex min-h-0 flex-1 flex-col" aria-busy={pending} data-reveal="" data-tour="task-list">
-        {pending ? <ResultsLoader label="Updating issues" /> : children}
+      <div className="flex min-h-0 flex-1 flex-col" data-reveal="" data-tour="task-list">
+        <TasksFilterProvider values={values}>{children}</TasksFilterProvider>
       </div>
     </div>
   );

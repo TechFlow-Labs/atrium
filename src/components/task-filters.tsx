@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
-import { Check, ChevronDown, CircleDashed, Layers, Search } from "lucide-react";
+import { Boxes, Check, ChevronDown, CircleDashed, Layers, Search } from "lucide-react";
 import { ProviderIcon, providerLabel } from "@/components/provider-icon";
 import { PriorityIcon, StatusIcon } from "@/components/task-meta-icons";
 import {
@@ -13,50 +13,25 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useHoverMenu } from "@/components/ui/use-hover-menu";
+import {
+  buildTasksHref,
+  parseFilterList,
+  serializeFilterList,
+  type FilterValues,
+} from "@/lib/task-filters";
 import { cn } from "@/lib/utils";
 
-type ProjectOption = { id: string; name: string };
+export type { FilterValues };
+export { buildTasksHref, parseFilterList, serializeFilterList };
 
-export type FilterValues = {
-  q?: string;
-  status?: string;
-  priority?: string;
-  project?: string;
-  source?: string;
-  view?: string;
-  dueBefore?: string;
-  dueAfter?: string;
-};
+type ProjectOption = { id: string; name: string; productId?: string };
+type ProductOption = { id: string; name: string };
 
 type PickerOption = {
   value: string;
   label: string;
   icon: ReactNode;
 };
-
-export function parseFilterList(raw?: string | null): string[] {
-  if (!raw?.trim()) return [];
-  return [...new Set(raw.split(",").map((part) => part.trim()).filter(Boolean))];
-}
-
-export function serializeFilterList(values: string[]): string | undefined {
-  const unique = [...new Set(values.map((value) => value.trim()).filter(Boolean))];
-  return unique.length > 0 ? unique.join(",") : undefined;
-}
-
-export function buildTasksHref(values: FilterValues): string {
-  const params = new URLSearchParams();
-  if (values.view) params.set("view", values.view);
-  if (values.q?.trim()) params.set("q", values.q.trim());
-  if (values.status) params.set("status", values.status);
-  if (values.priority) params.set("priority", values.priority);
-  if (values.project) params.set("project", values.project);
-  if (values.source) params.set("source", values.source);
-  if (values.dueBefore) params.set("dueBefore", values.dueBefore);
-  if (values.dueAfter) params.set("dueAfter", values.dueAfter);
-  const query = params.toString();
-  return query ? `/tasks?${query}` : "/tasks";
-}
 
 const STATUS_OPTIONS: PickerOption[] = [
   { value: "open", label: "Open", icon: <StatusIcon status="open" /> },
@@ -307,21 +282,37 @@ export function TaskSearch({
 
 export function TaskFilters({
   projects,
+  products = [],
   values,
   pending = false,
   onNavigate,
 }: {
   projects: ProjectOption[];
+  products?: ProductOption[];
   values: FilterValues;
   pending?: boolean;
   onNavigate: (href: string) => void;
 }) {
   const statuses = parseFilterList(values.status);
   const priorities = parseFilterList(values.priority);
+  const selectedProducts = parseFilterList(values.product);
   const selectedProjects = parseFilterList(values.project);
   const sources = parseFilterList(values.source);
 
-  const projectOptions: PickerOption[] = projects.map((item) => ({
+  const productOptions: PickerOption[] = products.map((item) => ({
+    value: item.id,
+    label: item.name,
+    icon: <Boxes className="size-4 text-teal-700" aria-hidden="true" />,
+  }));
+
+  const visibleProjects =
+    selectedProducts.length === 0
+      ? projects
+      : projects.filter(
+          (project) => project.productId && selectedProducts.includes(project.productId),
+        );
+
+  const projectOptions: PickerOption[] = visibleProjects.map((item) => ({
     value: item.id,
     label: item.name,
     icon: <CircleDashed className="size-4 text-teal-600" aria-hidden="true" />,
@@ -333,6 +324,7 @@ export function TaskFilters({
         ...values,
         status: serializeFilterList(statuses),
         priority: serializeFilterList(priorities),
+        product: serializeFilterList(selectedProducts),
         project: serializeFilterList(selectedProjects),
         source: serializeFilterList(sources),
         ...next,
@@ -343,7 +335,10 @@ export function TaskFilters({
   return (
     <div
       data-drag-inert=""
-      className={cn("grid gap-2 sm:grid-cols-2 lg:grid-cols-5", pending && "opacity-70")}
+      className={cn(
+        "grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6",
+        pending && "opacity-70",
+      )}
       aria-busy={pending}
     >
       <TaskSearch
@@ -368,11 +363,31 @@ export function TaskFilters({
         options={PRIORITY_OPTIONS}
         onChange={(next) => navigate({ priority: serializeFilterList(next) })}
       />
+      {products.length > 0 ? (
+        <MultiFilterPicker
+          label="Product"
+          emptyLabel="Any product"
+          noun="products"
+          values={selectedProducts}
+          options={productOptions}
+          onChange={(next) => {
+            const allowed = new Set(
+              projects
+                .filter((project) => !next.length || (project.productId && next.includes(project.productId)))
+                .map((project) => project.id),
+            );
+            navigate({
+              product: serializeFilterList(next),
+              project: serializeFilterList(selectedProjects.filter((id) => allowed.has(id))),
+            });
+          }}
+        />
+      ) : null}
       <MultiFilterPicker
         label="Project"
         emptyLabel="Any project"
         noun="projects"
-        values={selectedProjects}
+        values={selectedProjects.filter((id) => visibleProjects.some((project) => project.id === id))}
         options={projectOptions}
         onChange={(next) => navigate({ project: serializeFilterList(next) })}
       />

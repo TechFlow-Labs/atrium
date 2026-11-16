@@ -151,6 +151,7 @@ export function ProductsBoard({
         </div>
       </div>
 
+      <div data-products-body="" className="space-y-8 transition-opacity duration-150">
       {scope === "current" ? (
         <>
           <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4" data-tour="product-stats">
@@ -301,6 +302,7 @@ export function ProductsBoard({
           )}
         </div>
       )}
+      </div>
     </div>
   );
 }

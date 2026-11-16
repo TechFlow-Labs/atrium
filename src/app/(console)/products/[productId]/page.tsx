@@ -102,15 +102,20 @@ async function ProductDetailContent({
               </p>
             )}
           </div>
-          {canWrite && product.status === "active" ? (
-            <ProjectForm
-              workspaceId={current.id}
-              productId={product.id}
-              products={[{ id: product.id, name: product.name }]}
-              action={createProjectAction}
-              integrations={linkableIntegrations}
-            />
-          ) : null}
+          <div className="flex flex-wrap items-center gap-2">
+            <Button asChild variant="outline">
+              <Link href={`/tasks?product=${encodeURIComponent(product.id)}`}>View issues</Link>
+            </Button>
+            {canWrite && product.status === "active" ? (
+              <ProjectForm
+                workspaceId={current.id}
+                productId={product.id}
+                products={[{ id: product.id, name: product.name }]}
+                action={createProjectAction}
+                integrations={linkableIntegrations}
+              />
+            ) : null}
+          </div>
         </div>
       </div>
 
@@ -123,7 +128,7 @@ async function ProductDetailContent({
           icon={FolderKanban}
         />
         <ProjectStatCard
-          href="/tasks?priority=attention"
+          href={`/tasks?product=${encodeURIComponent(product.id)}&priority=attention`}
           label="Needs attention"
           value={product.attention_issues}
           hint={`${product.blocked_issues} blocked`}
@@ -131,7 +136,7 @@ async function ProductDetailContent({
           iconClassName="text-amber-500"
         />
         <ProjectStatCard
-          href="/tasks"
+          href={`/tasks?product=${encodeURIComponent(product.id)}`}
           label="Completion"
           value={`${product.completion}%`}
           hint={`${product.open_issues} open · ${product.done_issues} done`}
@@ -139,21 +144,21 @@ async function ProductDetailContent({
           iconClassName="text-emerald-500"
         />
         <ProjectStatCard
-          href="/tasks?status=open"
+          href={`/tasks?product=${encodeURIComponent(product.id)}&status=open`}
           label="Open issues"
           value={product.open_issues}
           hint={`${product.total_issues} total`}
           icon={CircleDot}
         />
         <ProjectStatCard
-          href="/tasks?status=in_progress"
+          href={`/tasks?product=${encodeURIComponent(product.id)}&status=in_progress`}
           label="In progress"
           value={product.in_progress_issues}
           hint="Actively worked"
           icon={ListTodo}
         />
         <ProjectStatCard
-          href="/tasks?status=blocked"
+          href={`/tasks?product=${encodeURIComponent(product.id)}&status=blocked`}
           label="Blocked"
           value={product.blocked_issues}
           hint="Waiting on something"

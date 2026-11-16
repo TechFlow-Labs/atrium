@@ -205,6 +205,7 @@ export async function listTasks(
   workspaceId: string,
   filter: {
     projectId?: string;
+    productId?: string;
     status?: string;
     priority?: string;
     source?: string;
@@ -232,12 +233,14 @@ export async function listTasks(
     ];
     // Prefer explicit multi project list; keep single projectId for callers that still pass it alone.
     const projectIds = parseFilterList(filter.projectId);
+    const productIds = parseFilterList(filter.productId);
     const sources = parseFilterList(filter.source);
     const wantAtrium = sources.some((source) => source === "atrium" || source === "native");
     const providerSources = sources.filter((source) => TASK_PROVIDER_SOURCES.has(source));
     const statusFilter = textArray(statuses);
     const priorityFilter = textArray(priorities);
     const projectFilter = textArray(projectIds);
+    const productFilter = textArray(productIds);
     const providerFilter = textArray(providerSources);
     return tx.execute<TaskRecord>(sql`
       select t.id, t.workspace_id, t.project_id,
@@ -251,6 +254,10 @@ export async function listTasks(
       left join "user" u on u.id = t.assignee_user_id
       where t.workspace_id = ${workspaceId}::uuid
         and (${filter.includeDeleted ?? false} or t.deleted_at is null)
+        and (
+          cardinality(${productFilter}) = 0
+          or p.product_id = any(${productFilter}::uuid[])
+        )
         and (
           cardinality(${projectFilter}) = 0
           or t.project_id = any(${projectFilter}::uuid[])
