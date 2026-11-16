@@ -37,7 +37,7 @@ export function listAllAdapterProviders(): ProviderId[] {
 export const OAUTH_SCOPES: Record<Exclude<ProviderId, "fake">, string[]> = {
   linear: ["read", "write"],
   jira: ["read:jira-work", "write:jira-work", "offline_access"],
-  github: ["repo"],
+  github: ["repo", "read:project", "project"],
   gitlab: ["api", "read_user"],
   gitea: ["read:user", "read:repository", "write:issue"],
 };

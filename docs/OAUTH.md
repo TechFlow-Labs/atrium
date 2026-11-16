@@ -37,7 +37,9 @@ GITHUB_CLIENT_SECRET=...
 
 7. Restart `pnpm dev`.
 
-Atrium requests the `repo` scope so private repository issues can sync. After authorize, you land on the integration page to link repositories.
+Atrium requests `repo`, `read:project`, and `project` so private repository issues and GitHub Projects v2 Status can sync both ways. After authorize, you land on the integration page to link repositories. Reconnect an existing GitHub integration after upgrading scopes so Project Status writes succeed.
+
+For inbound Project board moves, register the integration webhook (`/api/webhooks/github/{integrationId}`) on the organization or user that owns the Project, and include the **Projects v2 item** event (plus the usual **Issues** events on the repository).
 
 ## GitLab.com
 

@@ -1,6 +1,13 @@
 import { verifyHmacSha256 } from "../crypto/secrets";
 import { nextLink, providerFetch } from "./http";
-import { mapPriorityToProvider, mapStatusFromProvider } from "./mappings";
+import {
+  atriumStatusFromProjectName,
+  getIssueProjectStatus,
+  resolveGithubProjectNodeId,
+  resolveIssueFromNodeId,
+  setIssueProjectStatus,
+} from "./github-projects";
+import { mapPriorityToProvider } from "./mappings";
 import {
   operationMarker,
   ProviderError,
@@ -8,10 +15,12 @@ import {
   type IntegrationAdapter,
   type RemoteTask,
   type TaskPriority,
+  type TaskStatus,
 } from "./types";
 
 type GhIssue = {
   id: number;
+  node_id?: string;
   number: number;
   title: string;
   body?: string | null;
@@ -42,7 +51,15 @@ type GhComment = {
 
 function defaultMappings(): FieldMappings {
   return {
-    status: { open: "open", in_progress: "open", blocked: "open", done: "closed", cancelled: "closed" },
+    // Issue open/closed fallbacks; when a GitHub Project is linked, prefer Status option names
+    // (Todo / In Progress / Done) via heuristics or explicit mappings on the project page.
+    status: {
+      open: "Todo",
+      in_progress: "In Progress",
+      blocked: "In Progress",
+      done: "Done",
+      cancelled: "Done",
+    },
     priority: {
       none: "priority:none",
       low: "priority:low",
@@ -62,22 +79,33 @@ function priorityFromLabels(labels: Array<{ name: string }>, mappings: FieldMapp
   return "none";
 }
 
-function toRemote(issue: GhIssue, projectId: string, mappings: FieldMappings): RemoteTask {
+function toRemote(
+  issue: GhIssue,
+  projectId: string,
+  mappings: FieldMappings,
+  projectStatusName?: string | null,
+): RemoteTask {
   const closed = issue.state === "closed";
+  const status = atriumStatusFromProjectName(projectStatusName, mappings, closed);
   return {
     providerId: String(issue.number),
     providerProjectId: projectId,
     title: issue.title,
     description: issue.body ?? "",
-    status: closed ? mapStatusFromProvider(mappings, "closed") : "open",
+    status,
     priority: priorityFromLabels(issue.labels ?? [], mappings),
     dueAt: null,
     assigneeProviderId: issue.assignee?.login ?? null,
     assigneeLabel: issue.assignee?.login ?? null,
     url: issue.html_url,
     updatedAt: issue.updated_at,
-    archived: closed,
-    raw: { nodeId: issue.id, labels: (issue.labels ?? []).map((label) => label.name) },
+    archived: closed || status === "done" || status === "cancelled",
+    raw: {
+      nodeId: issue.node_id ?? issue.id,
+      restId: issue.id,
+      labels: (issue.labels ?? []).map((label) => label.name),
+      projectStatus: projectStatusName ?? null,
+    },
   };
 }
 
@@ -101,6 +129,45 @@ function repo(projectId: string): string {
     throw new ProviderError("GitHub repository must look like owner/name", "validation", false);
   }
   return projectId;
+}
+
+async function enrichWithProjectStatus(
+  token: string,
+  providerProjectId: string,
+  issue: GhIssue,
+  mappings: FieldMappings,
+): Promise<RemoteTask> {
+  try {
+    const projectNodeId = await resolveGithubProjectNodeId(token, providerProjectId, mappings);
+    if (!projectNodeId) return toRemote(issue, providerProjectId, mappings, null);
+    const info = await getIssueProjectStatus(token, providerProjectId, issue.number, projectNodeId);
+    return toRemote(issue, providerProjectId, mappings, info?.statusName ?? null);
+  } catch {
+    // Projects API may be unavailable (missing scope / no board). Fall back to issue state.
+    return toRemote(issue, providerProjectId, mappings, null);
+  }
+}
+
+async function pushProjectStatus(
+  token: string,
+  providerProjectId: string,
+  issue: GhIssue,
+  status: TaskStatus,
+  mappings: FieldMappings,
+): Promise<string | null> {
+  const projectNodeId = await resolveGithubProjectNodeId(token, providerProjectId, mappings);
+  if (!projectNodeId) return null;
+  const issueNodeId = typeof issue.node_id === "string" ? issue.node_id : null;
+  const result = await setIssueProjectStatus(
+    token,
+    providerProjectId,
+    issue.number,
+    issueNodeId,
+    status,
+    mappings,
+    projectNodeId,
+  );
+  return result?.statusName ?? null;
 }
 
 export const githubAdapter: IntegrationAdapter = {
@@ -131,8 +198,13 @@ export const githubAdapter: IntegrationAdapter = {
       ctx.credentials.accessToken,
     );
     const link = nextLink(response.headers.get("link"));
+    const issues = data.filter((issue) => !issue.pull_request);
+    const items: RemoteTask[] = [];
+    for (const issue of issues) {
+      items.push(await enrichWithProjectStatus(ctx.credentials.accessToken, query.providerProjectId, issue, ctx.mappings));
+    }
     return {
-      items: data.filter((issue) => !issue.pull_request).map((issue) => toRemote(issue, query.providerProjectId, ctx.mappings)),
+      items,
       nextCursor: link ? new URL(link).searchParams.get("page") : null,
     };
   },
@@ -141,14 +213,16 @@ export const githubAdapter: IntegrationAdapter = {
       `https://api.github.com/repos/${repo(providerProjectId)}/issues/${encodeURIComponent(providerId)}`,
       ctx.credentials.accessToken,
     );
-    return toRemote(data, providerProjectId, ctx.mappings);
+    return enrichWithProjectStatus(ctx.credentials.accessToken, providerProjectId, data, ctx.mappings);
   },
   async createTask(ctx, input) {
     const marker = operationMarker(input.operationId);
     const searchUrl = `https://api.github.com/search/issues?q=${encodeURIComponent(`${marker} repo:${input.providerProjectId} in:body`)}`;
     const { data: search } = await gh<{ items: GhIssue[] }>(searchUrl, ctx.credentials.accessToken);
     const replay = search.items?.[0];
-    if (replay) return toRemote(replay, input.providerProjectId, ctx.mappings);
+    if (replay) {
+      return enrichWithProjectStatus(ctx.credentials.accessToken, input.providerProjectId, replay, ctx.mappings);
+    }
     const labels = [mapPriorityToProvider(ctx.mappings, input.priority ?? "none")];
     const { data } = await gh<GhIssue>(`https://api.github.com/repos/${repo(input.providerProjectId)}/issues`, ctx.credentials.accessToken, {
       method: "POST",
@@ -158,10 +232,33 @@ export const githubAdapter: IntegrationAdapter = {
         labels,
       }),
     });
-    return toRemote(data, input.providerProjectId, ctx.mappings);
+    let projectStatus: string | null = null;
+    if (input.status) {
+      try {
+        projectStatus = await pushProjectStatus(
+          ctx.credentials.accessToken,
+          input.providerProjectId,
+          data,
+          input.status,
+          ctx.mappings,
+        );
+      } catch {
+        // Issue was created; Project Status can be set on a later update once scopes/board exist.
+      }
+    }
+    return toRemote(data, input.providerProjectId, ctx.mappings, projectStatus);
   },
   async updateTask(ctx, providerId, input) {
-    const current = await this.getTask(ctx, providerId, input.providerProjectId);
+    const { data: currentIssue } = await gh<GhIssue>(
+      `https://api.github.com/repos/${repo(input.providerProjectId)}/issues/${encodeURIComponent(providerId)}`,
+      ctx.credentials.accessToken,
+    );
+    const current = await enrichWithProjectStatus(
+      ctx.credentials.accessToken,
+      input.providerProjectId,
+      currentIssue,
+      ctx.mappings,
+    );
     const labels = new Set(((current.raw.labels as string[] | undefined) ?? []).filter((label) => !label.startsWith("priority:")));
     if (input.priority) labels.add(mapPriorityToProvider(ctx.mappings, input.priority));
     const body: Record<string, unknown> = { labels: [...labels] };
@@ -173,7 +270,34 @@ export const githubAdapter: IntegrationAdapter = {
       ctx.credentials.accessToken,
       { method: "PATCH", body: JSON.stringify(body) },
     );
-    return toRemote(data, input.providerProjectId, ctx.mappings);
+
+    let projectStatus = (current.raw.projectStatus as string | null | undefined) ?? null;
+    if (input.status) {
+      try {
+        projectStatus = await pushProjectStatus(
+          ctx.credentials.accessToken,
+          input.providerProjectId,
+          data,
+          input.status,
+          ctx.mappings,
+        );
+      } catch {
+        // Issue REST update already succeeded; Project Status needs project scope + a linked board.
+      }
+    } else {
+      try {
+        const enriched = await enrichWithProjectStatus(
+          ctx.credentials.accessToken,
+          input.providerProjectId,
+          data,
+          ctx.mappings,
+        );
+        projectStatus = (enriched.raw.projectStatus as string | null | undefined) ?? null;
+      } catch {
+        projectStatus = null;
+      }
+    }
+    return toRemote(data, input.providerProjectId, ctx.mappings, projectStatus);
   },
   async archiveTask(ctx, providerId, providerProjectId) {
     return this.updateTask(ctx, providerId, { providerProjectId, operationId: providerId, status: "done" });
@@ -227,13 +351,61 @@ export const githubAdapter: IntegrationAdapter = {
       repository?: { full_name?: string };
       issue?: GhIssue;
       pull_request?: { id: number; number: number; title: string; html_url: string; state: string };
+      projects_v2_item?: {
+        node_id?: string;
+        content_node_id?: string;
+        content_type?: string;
+        project_node_id?: string;
+      };
     };
     const projectId = body.repository?.full_name ?? null;
     if (event === "issues" && body.issue && projectId) {
       if (body.action === "deleted") {
         return { events: [{ kind: "task.delete", providerId: String(body.issue.number), providerProjectId: projectId }] };
       }
-      return { events: [{ kind: "task.upsert", task: toRemote(body.issue, projectId, ctx.mappings) }] };
+      const task = await enrichWithProjectStatus(
+        ctx.credentials.accessToken,
+        projectId,
+        body.issue,
+        ctx.mappings,
+      );
+      return { events: [{ kind: "task.upsert", task }] };
+    }
+    if (event === "projects_v2_item" && body.projects_v2_item?.content_type === "Issue") {
+      const contentId = body.projects_v2_item.content_node_id;
+      if (!contentId) return { events: [] };
+      try {
+        const issue = await resolveIssueFromNodeId(ctx.credentials.accessToken, contentId);
+        if (!issue) return { events: [] };
+        const configured = ctx.mappings.githubProjectNodeId?.trim();
+        if (configured && body.projects_v2_item.project_node_id && configured !== body.projects_v2_item.project_node_id) {
+          return { events: [] };
+        }
+        const ghIssue: GhIssue = {
+          id: 0,
+          node_id: issue.nodeId,
+          number: issue.number,
+          title: issue.title,
+          body: issue.body,
+          state: issue.state,
+          html_url: issue.url,
+          updated_at: issue.updatedAt,
+          labels: issue.labels.map((name) => ({ name })),
+          assignee: issue.assignee ? { login: issue.assignee } : null,
+        };
+        const task = await enrichWithProjectStatus(
+          ctx.credentials.accessToken,
+          issue.providerProjectId,
+          ghIssue,
+          {
+            ...ctx.mappings,
+            githubProjectNodeId: body.projects_v2_item.project_node_id ?? ctx.mappings.githubProjectNodeId,
+          },
+        );
+        return { events: [{ kind: "task.upsert", task }] };
+      } catch {
+        return { events: [] };
+      }
     }
     if (event === "pull_request" && body.pull_request && projectId) {
       return {

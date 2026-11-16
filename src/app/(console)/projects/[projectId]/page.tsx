@@ -29,6 +29,7 @@ import { Button } from "@/components/ui/button";
 import { Input, Label, Textarea } from "@/components/ui/field";
 import { getSessionUser } from "@/server/auth/session";
 import { workspaceContext } from "@/server/auth/workspace";
+import { listGithubProjectsForConnection } from "@/server/integrations/service";
 import { listProducts } from "@/server/products/service";
 import { getProject, listMilestones } from "@/server/projects/service";
 import { listTasks } from "@/server/tasks/service";
@@ -69,10 +70,20 @@ async function ProjectContent({ params }: { params: Promise<{ projectId: string 
   `));
   const canAdmin = current.role === "owner" || current.role === "admin";
   const canWrite = canAdmin || current.role === "member";
-  const mappings = await withUser(user.id, (tx) => tx.execute<{ field_mappings: { status?: Record<string, string>; priority?: Record<string, string> } }>(sql`
+  const mappings = await withUser(user.id, (tx) => tx.execute<{
+    field_mappings: {
+      status?: Record<string, string>;
+      priority?: Record<string, string>;
+      githubProjectNodeId?: string;
+    };
+  }>(sql`
     select field_mappings from project_connections where project_id = ${projectId}::uuid
   `));
   const map = mappings[0]?.field_mappings;
+  const githubBoards =
+    project.provider === "github" && canAdmin
+      ? await listGithubProjectsForConnection(user.id, current.id, projectId)
+      : [];
   // eslint-disable-next-line react-hooks/purity -- connection() already opted this request out of prerender
   const now = Date.now();
   const stats = buildProjectDashboardStats(tasks, now);
@@ -415,10 +426,43 @@ async function ProjectContent({ params }: { params: Promise<{ projectId: string 
                 <h3 className="text-lg font-medium">Field mappings</h3>
                 <p className="mt-1 text-sm text-muted">
                   Map Atrium statuses and priorities onto provider values. Linear status changes need a state id, not a
-                  display name.
+                  display name. For GitHub, map statuses to Project Status option names (for example Todo, In Progress,
+                  Done) when a board is linked below.
                 </p>
                 <input type="hidden" name="workspaceId" value={current.id} />
                 <input type="hidden" name="projectId" value={project.id} />
+                {project.provider === "github" ? (
+                  <div className="mt-3">
+                    <Label htmlFor="githubProjectNodeId">GitHub Project board</Label>
+                    <MenuSelect
+                      id="githubProjectNodeId"
+                      name="githubProjectNodeId"
+                      className="mt-1"
+                      aria-label="GitHub Project board"
+                      defaultValue={map.githubProjectNodeId ?? ""}
+                      options={[
+                        {
+                          value: "",
+                          label: githubBoards.length
+                            ? "Auto (first board on the repository)"
+                            : "No boards found — reconnect GitHub with project scopes",
+                        },
+                        ...githubBoards.map((board) => ({
+                          value: board.id,
+                          label: `${board.title} (#${board.number})`,
+                        })),
+                        ...(map.githubProjectNodeId
+                          && !githubBoards.some((board) => board.id === map.githubProjectNodeId)
+                          ? [{ value: map.githubProjectNodeId, label: `Saved board (${map.githubProjectNodeId})` }]
+                          : []),
+                      ]}
+                    />
+                    <p className="mt-1 text-xs text-muted">
+                      Two-way Status sync uses this Projects v2 board. Webhook deliveries need the Projects v2 item
+                      event on the org or user that owns the board.
+                    </p>
+                  </div>
+                ) : null}
                 <div className="mt-3 grid gap-2 md:grid-cols-2">
                   {(["open", "in_progress", "blocked", "done", "cancelled"] as const).map((status) => (
                     <label key={status} className="text-sm">

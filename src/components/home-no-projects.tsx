@@ -36,7 +36,7 @@ type IntegrationRow = {
 const PROVIDER_COPY: Record<string, string> = {
   linear: "Link a Linear team and sync its issues into this workspace.",
   jira: "Link a Jira Cloud project and keep issues in sync.",
-  github: "Track issues from a GitHub repository you choose.",
+  github: "Track issues and Project Status from a GitHub repository you choose.",
   gitlab: "Sync issues from a GitLab project you choose.",
   gitea: "Sync issues from a Gitea repository you choose.",
 };

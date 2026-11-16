@@ -856,6 +856,9 @@ export async function linkProjectAction(_state: ActionState, formData: FormData)
 }
 
 export async function mappingAction(formData: FormData): Promise<void> {
+  const githubProjectNodeId = formData.has("githubProjectNodeId")
+    ? String(formData.get("githubProjectNodeId") ?? "").trim()
+    : undefined;
   const mappings = {
     status: {
       open: String(formData.get("status_open") ?? ""),
@@ -871,6 +874,7 @@ export async function mappingAction(formData: FormData): Promise<void> {
       high: String(formData.get("priority_high") ?? ""),
       urgent: String(formData.get("priority_urgent") ?? ""),
     },
+    ...(githubProjectNodeId !== undefined ? { githubProjectNodeId } : {}),
   };
   await updateFieldMappings(await userId(), String(formData.get("workspaceId")), String(formData.get("projectId")), mappings);
   redirect(`/projects/${formData.get("projectId")}`);

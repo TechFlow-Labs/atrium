@@ -520,19 +520,75 @@ export async function updateFieldMappings(
 ): Promise<void> {
   await withUser(userId, async (tx) => {
     await requireAction(tx, workspaceId, "integration.manage");
-    const rows = await tx.execute(sql`
-      update project_connections
-      set field_mappings = ${JSON.stringify(mappings)}::jsonb
+    const existing = await tx.execute<{ field_mappings: FieldMappings | null }>(sql`
+      select field_mappings
+      from project_connections
       where project_id = ${projectId}::uuid and workspace_id = ${workspaceId}::uuid
-      returning id
     `);
-    if (!rows[0]) throw new Error("Project connection not found");
+    if (!existing[0]) throw new Error("Project connection not found");
+    const prev = existing[0].field_mappings ?? {};
+    const next: FieldMappings = {
+      ...prev,
+      ...mappings,
+      status: mappings.status ?? prev.status,
+      priority: mappings.priority ?? prev.priority,
+      assignees: mappings.assignees ?? prev.assignees,
+      githubProjectNodeId:
+        mappings.githubProjectNodeId !== undefined
+          ? mappings.githubProjectNodeId.trim() || undefined
+          : prev.githubProjectNodeId,
+    };
+    await tx.execute(sql`
+      update project_connections
+      set field_mappings = ${JSON.stringify(next)}::jsonb
+      where project_id = ${projectId}::uuid and workspace_id = ${workspaceId}::uuid
+    `);
     await writeAudit(tx, {
       workspaceId,
       action: "integration.mappings_updated",
       entityType: "project",
       entityId: projectId,
     });
+  });
+}
+
+/** Lists GitHub Projects v2 boards linked to the repository for an Atrium project connection. */
+export async function listGithubProjectsForConnection(
+  userId: string,
+  workspaceId: string,
+  projectId: string,
+): Promise<Array<{ id: string; title: string; number: number }>> {
+  const { listRepositoryProjectsV2 } = await import("./github-projects");
+  return withUser(userId, async (tx) => {
+    await requireAction(tx, workspaceId, "task.read");
+    const rows = await tx.execute<{
+      integration_id: string;
+      provider: string;
+      provider_project_id: string;
+      credential_ciphertext: string | null;
+      status: string;
+      workspace_id: string;
+    }>(sql`
+      select c.integration_id, i.provider, c.provider_project_id, i.credential_ciphertext, i.status, i.workspace_id
+      from project_connections c
+      join integrations i on i.id = c.integration_id
+      where c.project_id = ${projectId}::uuid and c.workspace_id = ${workspaceId}::uuid
+    `);
+    const row = rows[0];
+    if (!row || row.provider !== "github" || !row.credential_ciphertext || row.status === "revoked") {
+      return [];
+    }
+    const credentials = await ensureFreshCredentials(tx, {
+      integrationId: row.integration_id,
+      workspaceId: row.workspace_id,
+      provider: "github",
+      ciphertext: row.credential_ciphertext,
+    });
+    try {
+      return await listRepositoryProjectsV2(credentials.accessToken, row.provider_project_id);
+    } catch {
+      return [];
+    }
   });
 }
 

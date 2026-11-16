@@ -26,7 +26,7 @@ The app role can set the user id itself. That is the trusted application boundar
 
 ## Providers
 
-`IntegrationAdapter` is implemented for a deterministic fake provider plus Linear (GraphQL), Jira Cloud (REST v3), and GitHub (REST). Credentials are AES-256-GCM envelopes. The key lives only in `CREDENTIAL_ENCRYPTION_KEY`. Disconnecting an integration nulls the ciphertext. Outbound URLs are https, port 443, and limited to the official API hosts.
+`IntegrationAdapter` is implemented for a deterministic fake provider plus Linear (GraphQL), Jira Cloud (REST v3), and GitHub (REST issues plus GraphQL Projects v2 Status). Credentials are AES-256-GCM envelopes. The key lives only in `CREDENTIAL_ENCRYPTION_KEY`. Disconnecting an integration nulls the ciphertext. Outbound URLs are https, port 443, and limited to the official API hosts.
 
 ## Sync
 

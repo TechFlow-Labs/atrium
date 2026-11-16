@@ -39,7 +39,7 @@ type IntegrationRow = {
 const COPY: Record<string, string> = {
   linear: "Sync issues from Linear teams into Atrium projects.",
   jira: "Bring Jira Cloud projects and issues into this workspace.",
-  github: "Track GitHub issues from repositories you choose.",
+  github: "Track GitHub issues and Project Status from repositories you choose.",
   gitlab: "Sync GitLab issues from projects you choose.",
   gitea: "Sync Gitea issues from repositories you choose.",
   slack: "Read today's channel messages on the Chats dashboard with a free Slack bot token.",

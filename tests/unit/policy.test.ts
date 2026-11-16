@@ -172,6 +172,17 @@ describe("provider adapters", () => {
   });
 
   it("parses GitHub issue and pull request webhooks", async () => {
+    setProviderFetch(async (url) => {
+      if (url.includes("graphql")) {
+        return json({
+          data: {
+            repository: { projectsV2: { nodes: [] }, issue: null },
+            node: null,
+          },
+        });
+      }
+      return json({}, 404);
+    });
     const raw = JSON.stringify({
       action: "opened",
       repository: { full_name: "ada/board" },
@@ -203,6 +214,94 @@ describe("provider adapters", () => {
       },
     );
     expect(pr.events[0]?.kind).toBe("record.upsert");
+  });
+
+  it("parses GitHub Projects v2 item webhooks into task upserts", async () => {
+    setProviderFetch(async (url, init) => {
+      if (!url.includes("graphql")) return json({}, 404);
+      const body = JSON.parse(String(init?.body)) as { query: string; variables?: Record<string, string> };
+      if (body.query.includes("... on Issue")) {
+        return json({
+          data: {
+            node: {
+              id: "I_issue",
+              number: 4,
+              title: "Fix gate",
+              body: "details",
+              state: "OPEN",
+              url: "https://github.com/ada/board/issues/4",
+              updatedAt: "2026-10-15T00:00:00Z",
+              repository: { nameWithOwner: "ada/board" },
+              labels: { nodes: [{ name: "priority:high" }] },
+              assignees: { nodes: [] },
+            },
+          },
+        });
+      }
+      if (body.query.includes("projectItems")) {
+        return json({
+          data: {
+            repository: {
+              issue: {
+                id: "I_issue",
+                projectItems: {
+                  nodes: [
+                    {
+                      id: "PVTI_1",
+                      project: { id: "PVT_board", title: "Delivery" },
+                      fieldValues: {
+                        nodes: [
+                          {
+                            name: "In Progress",
+                            field: { id: "PVTSSF_status", name: "Status" },
+                          },
+                        ],
+                      },
+                    },
+                  ],
+                },
+              },
+            },
+          },
+        });
+      }
+      if (body.query.includes('field(name: "Status")')) {
+        return json({
+          data: {
+            node: {
+              field: {
+                id: "PVTSSF_status",
+                options: [
+                  { id: "opt_todo", name: "Todo" },
+                  { id: "opt_wip", name: "In Progress" },
+                  { id: "opt_done", name: "Done" },
+                ],
+              },
+            },
+          },
+        });
+      }
+      return json({ data: { repository: { projectsV2: { nodes: [{ id: "PVT_board", title: "Delivery", number: 1 }] } } } });
+    });
+    const parsed = await githubAdapter.parseWebhook(
+      { ...ctx, mappings: { ...githubAdapter.defaultMappings(), githubProjectNodeId: "PVT_board" } },
+      {
+        rawBody: JSON.stringify({
+          action: "edited",
+          projects_v2_item: {
+            node_id: "PVTI_1",
+            content_node_id: "I_issue",
+            content_type: "Issue",
+            project_node_id: "PVT_board",
+          },
+        }),
+        headers: { "x-github-event": "projects_v2_item" },
+      },
+    );
+    expect(parsed.events[0]).toMatchObject({
+      kind: "task.upsert",
+      task: { providerId: "4", status: "in_progress", providerProjectId: "ada/board" },
+    });
   });
 
   it("pages Linear teams and Jira projects", async () => {

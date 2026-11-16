@@ -61,7 +61,7 @@ Values saved in a workspace take priority. The deployment variables are the fall
 
 - Linear: `read`, `write`
 - Jira: `read:jira-work`, `write:jira-work`, `offline_access`
-- GitHub: classic `repo` (issues on private repositories)
+- GitHub: classic `repo`, `read:project`, `project` (issues + Projects v2 Status two-way sync)
 - GitLab: `api`, `read_user`
 
 ### Set by Compose, do not set

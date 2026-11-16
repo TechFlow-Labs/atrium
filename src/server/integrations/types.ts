@@ -41,6 +41,11 @@ export type FieldMappings = {
   status?: Partial<Record<TaskStatus, string>>;
   priority?: Partial<Record<TaskPriority, string>>;
   assignees?: Record<string, string>;
+  /**
+   * GitHub Projects v2 board node id (`PVT_…`).
+   * When set (or auto-discovered for the repo), Atrium syncs Status two-way with that board.
+   */
+  githubProjectNodeId?: string;
 };
 
 export type StoredCredential = {
