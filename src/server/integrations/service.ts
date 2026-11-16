@@ -557,7 +557,7 @@ export async function listGithubProjectsForConnection(
   userId: string,
   workspaceId: string,
   projectId: string,
-): Promise<Array<{ id: string; title: string; number: number }>> {
+): Promise<Array<{ id: string; title: string; number: number; url: string }>> {
   const { listRepositoryProjectsV2 } = await import("./github-projects");
   return withUser(userId, async (tx) => {
     await requireAction(tx, workspaceId, "task.read");
@@ -588,6 +588,46 @@ export async function listGithubProjectsForConnection(
       return await listRepositoryProjectsV2(credentials.accessToken, row.provider_project_id);
     } catch {
       return [];
+    }
+  });
+}
+
+/** Looks up a GitHub Project v2 board URL by node id for a linked Atrium project. */
+export async function getGithubProjectBoardUrl(
+  userId: string,
+  workspaceId: string,
+  projectId: string,
+  githubProjectNodeId: string,
+): Promise<string | null> {
+  const { getGithubProjectUrl } = await import("./github-projects");
+  return withUser(userId, async (tx) => {
+    await requireAction(tx, workspaceId, "task.read");
+    const rows = await tx.execute<{
+      integration_id: string;
+      provider: string;
+      credential_ciphertext: string | null;
+      status: string;
+      workspace_id: string;
+    }>(sql`
+      select c.integration_id, i.provider, i.credential_ciphertext, i.status, i.workspace_id
+      from project_connections c
+      join integrations i on i.id = c.integration_id
+      where c.project_id = ${projectId}::uuid and c.workspace_id = ${workspaceId}::uuid
+    `);
+    const row = rows[0];
+    if (!row || row.provider !== "github" || !row.credential_ciphertext || row.status === "revoked") {
+      return null;
+    }
+    const credentials = await ensureFreshCredentials(tx, {
+      integrationId: row.integration_id,
+      workspaceId: row.workspace_id,
+      provider: "github",
+      ciphertext: row.credential_ciphertext,
+    });
+    try {
+      return await getGithubProjectUrl(credentials.accessToken, githubProjectNodeId);
+    } catch {
+      return null;
     }
   });
 }

@@ -317,14 +317,17 @@ export function OpenInProviderButton({
   provider,
   href,
   className,
+  label,
 }: {
   provider: string | null | undefined;
   href: string;
   className?: string;
+  /** Overrides the default “Open in {provider}” text. */
+  label?: string;
 }) {
   const key = provider && LABELS[provider] ? provider : null;
   if (!key || key === "native") return null;
-  const label = LABELS[key] ?? "provider";
+  const text = label ?? `Open in ${LABELS[key] ?? "provider"}`;
   return (
     <a
       href={href}
@@ -343,7 +346,7 @@ export function OpenInProviderButton({
       >
         <ProviderMark provider={key} className="size-3" />
       </span>
-      Open in {label}
+      {text}
       <ExternalLink className="size-3 text-muted" aria-hidden="true" />
     </a>
   );

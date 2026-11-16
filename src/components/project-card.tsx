@@ -93,7 +93,11 @@ export function ProjectCard({
             <p className={cn("min-w-0 truncate text-xs font-medium", accent.ink)}>{sourceLabel}</p>
             {project.provider && project.provider_project_url ? (
               <span className="pointer-events-auto relative z-10">
-                <OpenInProviderButton provider={project.provider} href={project.provider_project_url} />
+                <OpenInProviderButton
+                  provider={project.provider}
+                  href={project.provider_project_url}
+                  label={project.provider === "github" ? "Open repository" : undefined}
+                />
               </span>
             ) : null}
           </div>

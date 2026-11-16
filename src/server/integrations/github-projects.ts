@@ -49,24 +49,45 @@ function splitRepo(providerProjectId: string): { owner: string; name: string } {
 export async function listRepositoryProjectsV2(
   token: string,
   providerProjectId: string,
-): Promise<Array<{ id: string; title: string; number: number }>> {
+): Promise<Array<{ id: string; title: string; number: number; url: string }>> {
   const { owner, name } = splitRepo(providerProjectId);
   const data = await githubGraphql<{
-    repository: { projectsV2: { nodes: Array<{ id: string; title: string; number: number } | null> } } | null;
+    repository: {
+      projectsV2: { nodes: Array<{ id: string; title: string; number: number; url: string } | null> };
+    } | null;
   }>(
     token,
     `query($owner: String!, $name: String!) {
       repository(owner: $owner, name: $name) {
         projectsV2(first: 20) {
-          nodes { id title number }
+          nodes { id title number url }
         }
       }
     }`,
     { owner, name },
   );
   return (data.repository?.projectsV2.nodes ?? []).filter(
-    (node): node is { id: string; title: string; number: number } => Boolean(node?.id),
+    (node): node is { id: string; title: string; number: number; url: string } =>
+      Boolean(node?.id && node.url),
   );
+}
+
+export async function getGithubProjectUrl(
+  token: string,
+  projectNodeId: string,
+): Promise<string | null> {
+  const data = await githubGraphql<{
+    node: { url?: string | null } | null;
+  }>(
+    token,
+    `query($id: ID!) {
+      node(id: $id) {
+        ... on ProjectV2 { url }
+      }
+    }`,
+    { id: projectNodeId },
+  );
+  return data.node?.url ?? null;
 }
 
 export async function resolveGithubProjectNodeId(

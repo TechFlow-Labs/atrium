@@ -29,7 +29,10 @@ import { Button } from "@/components/ui/button";
 import { Input, Label, Textarea } from "@/components/ui/field";
 import { getSessionUser } from "@/server/auth/session";
 import { workspaceContext } from "@/server/auth/workspace";
-import { listGithubProjectsForConnection } from "@/server/integrations/service";
+import {
+  getGithubProjectBoardUrl,
+  listGithubProjectsForConnection,
+} from "@/server/integrations/service";
 import { listProducts } from "@/server/products/service";
 import { getProject, listMilestones } from "@/server/projects/service";
 import { listTasks } from "@/server/tasks/service";
@@ -81,9 +84,22 @@ async function ProjectContent({ params }: { params: Promise<{ projectId: string 
   `));
   const map = mappings[0]?.field_mappings;
   const githubBoards =
-    project.provider === "github" && canAdmin
+    project.provider === "github"
       ? await listGithubProjectsForConnection(user.id, current.id, projectId)
       : [];
+  const configuredGithubBoardId = map?.githubProjectNodeId?.trim() || "";
+  let githubProjectUrl =
+    (configuredGithubBoardId
+      ? githubBoards.find((board) => board.id === configuredGithubBoardId)?.url
+      : githubBoards[0]?.url) ?? null;
+  if (!githubProjectUrl && configuredGithubBoardId) {
+    githubProjectUrl = await getGithubProjectBoardUrl(
+      user.id,
+      current.id,
+      projectId,
+      configuredGithubBoardId,
+    );
+  }
   // eslint-disable-next-line react-hooks/purity -- connection() already opted this request out of prerender
   const now = Date.now();
   const stats = buildProjectDashboardStats(tasks, now);
@@ -128,7 +144,14 @@ async function ProjectContent({ params }: { params: Promise<{ projectId: string 
             <Badge tone={project.ownership_mode === "native" ? "native" : "external"}>{project.ownership_mode}</Badge>
             {project.provider ? <Badge tone="external">{project.provider}</Badge> : null}
             {project.provider_project_url ? (
-              <OpenInProviderButton provider={project.provider} href={project.provider_project_url} />
+              <OpenInProviderButton
+                provider={project.provider}
+                href={project.provider_project_url}
+                label={project.provider === "github" ? "Open repository" : undefined}
+              />
+            ) : null}
+            {project.provider === "github" && githubProjectUrl ? (
+              <OpenInProviderButton provider="github" href={githubProjectUrl} label="Open project" />
             ) : null}
           </div>
         </div>
@@ -347,10 +370,18 @@ async function ProjectContent({ params }: { params: Promise<{ projectId: string 
       ) : null}
 
       {(canAdmin || map) ? (
-        <details data-tour="project-manage" className="rounded-lg border bg-card">
-          <summary className="cursor-pointer list-none px-4 py-3 text-sm font-medium marker:content-none [&::-webkit-details-marker]:hidden">
-            Manage project
-            <span className="ml-2 text-xs font-normal text-muted">Settings, mappings, and publishing</span>
+        <details
+          data-tour="project-manage"
+          className="group rounded-lg border bg-card"
+          open={project.provider === "github"}
+        >
+          <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-medium marker:content-none [&::-webkit-details-marker]:hidden">
+            <span>
+              Manage project
+              <span className="ml-2 text-xs font-normal text-muted">Settings, mappings, and publishing</span>
+            </span>
+            <span className="shrink-0 text-xs font-normal text-muted group-open:hidden">Show</span>
+            <span className="hidden shrink-0 text-xs font-normal text-muted group-open:inline">Hide</span>
           </summary>
           <div className="space-y-6 border-t px-4 py-4">
             {canAdmin ? (
