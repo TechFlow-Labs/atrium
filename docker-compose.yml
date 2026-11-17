@@ -1,4 +1,5 @@
-# Production stack for Coolify or any Docker host with Traefik in front.
+# Production stack for a Docker host with a reverse proxy in front (nginx on
+# techflowlabs.gr; Traefik labels are optional leftover metadata).
 # Every ${VAR:?...} below is required at deploy time. Optional values use
 # ${VAR:-default} or ${VAR:-} and can stay unset. See docs/DEPLOYMENT.md.
 services:
@@ -52,6 +53,10 @@ services:
       JIRA_CLIENT_SECRET: ${JIRA_CLIENT_SECRET:-}
       GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID:-}
       GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET:-}
+      GITHUB_APP_CLIENT_ID: ${GITHUB_APP_CLIENT_ID:-}
+      GITHUB_APP_PRIVATE_KEY: ${GITHUB_APP_PRIVATE_KEY:-}
+      GITHUB_APP_SLUG: ${GITHUB_APP_SLUG:-}
+      GITHUB_APP_WEBHOOK_SECRET: ${GITHUB_APP_WEBHOOK_SECRET:-}
       GITLAB_CLIENT_ID: ${GITLAB_CLIENT_ID:-}
       GITLAB_CLIENT_SECRET: ${GITLAB_CLIENT_SECRET:-}
       GITEA_CLIENT_ID: ${GITEA_CLIENT_ID:-}
@@ -65,7 +70,8 @@ services:
       SMTP_FROM: ${SMTP_FROM:-}
       NODE_ENV: production
     ports:
-      - "38471:38471"
+      # Bind to loopback so the reverse proxy (nginx) is the only public entry.
+      - "127.0.0.1:38471:38471"
     labels:
       - traefik.enable=true
       - traefik.http.routers.atrium.rule=Host(`${ATRIUM_HOST:?set ATRIUM_HOST to the public hostname}`)
@@ -90,6 +96,10 @@ services:
       DATABASE_URL_WORKER: postgres://atrium_worker:${WORKER_PASSWORD}@postgres:5432/atrium
       CREDENTIAL_ENCRYPTION_KEY: ${CREDENTIAL_ENCRYPTION_KEY:?set CREDENTIAL_ENCRYPTION_KEY}
       ALLOW_FAKE_PROVIDER: ${ALLOW_FAKE_PROVIDER:-false}
+      GITHUB_APP_CLIENT_ID: ${GITHUB_APP_CLIENT_ID:-}
+      GITHUB_APP_PRIVATE_KEY: ${GITHUB_APP_PRIVATE_KEY:-}
+      GITHUB_APP_SLUG: ${GITHUB_APP_SLUG:-}
+      GITHUB_APP_WEBHOOK_SECRET: ${GITHUB_APP_WEBHOOK_SECRET:-}
       SMTP_HOST: ${SMTP_HOST:-}
       SMTP_PORT: ${SMTP_PORT:-465}
       SMTP_SECURE: ${SMTP_SECURE:-}

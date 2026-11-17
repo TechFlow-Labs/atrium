@@ -1,15 +1,15 @@
 # Deployment
 
-Atrium runs as two processes against PostgreSQL 16. The Compose file is meant for Coolify with Traefik already on the host network. Do not point Coolify at a `convex deploy` workflow. This application does not use Convex.
+Atrium runs as two processes against PostgreSQL 16. Production on techflowlabs.gr uses **GitLab CI** (`deploy/compose-up.sh`) and **host nginx** terminating TLS, proxying to the app on loopback port 38471. This application does not use Convex. Optional Traefik labels in Compose are unused when nginx is the proxy.
 
 ## Services
 
 - `postgres` creates `atrium_migrator` (superuser, migrations only), `atrium_app` (no bypass RLS), and `atrium_worker` (bypass RLS).
 - `migrate` applies `db/migrations` once and exits.
-- `app` serves Next.js on port 38471 and exposes `/api/health`.
+- `app` serves Next.js on `127.0.0.1:38471` and exposes `/api/health`.
 - `worker` drains jobs and the outbox. Leave `EMBEDDED_WORKER` unset in production so the web process does not also hold the worker connection.
 
-Traefik labels route `Host(\`${ATRIUM_HOST}\`)` to port 38471 with TLS. Set `BETTER_AUTH_URL` to the public https origin. Coolify should terminate TLS at Traefik and forward the original host.
+Set `BETTER_AUTH_URL` to the public https origin (for example `https://atrium.techflowlabs.gr`). Nginx should forward `Host` and `X-Forwarded-Proto`. Publish the app port on loopback only (`127.0.0.1:38471:38471`) so clients cannot bypass TLS.
 
 ## Environment
 
@@ -28,7 +28,7 @@ Generate the secrets with `openssl rand -base64 32`.
 | `BETTER_AUTH_SECRET` | app | Signs sessions. Changing it signs everyone out. |
 | `BETTER_AUTH_URL` | app | Public origin, for example `https://atrium.example.com`. Provider callbacks and MCP URLs derive from it. |
 | `CREDENTIAL_ENCRYPTION_KEY` | app, worker | Encrypts stored provider tokens. Back it up. Losing it makes saved tokens unreadable. |
-| `ATRIUM_HOST` | app (Traefik label) | Public hostname without a scheme, for example `atrium.example.com`. |
+| `ATRIUM_HOST` | app (optional Traefik label) | Public hostname without a scheme, for example `atrium.techflowlabs.gr`. Required only if Traefik labels are used. |
 
 The role passwords must not contain single quotes. `docker/postgres/init.sh` runs only on the first database boot, so changing a role password later means updating the role with `ALTER ROLE` as well as the environment variable.
 
@@ -38,7 +38,8 @@ The role passwords must not contain single quotes. `docker/postgres/init.sh` run
 | --- | --- | --- |
 | `LINEAR_CLIENT_ID`, `LINEAR_CLIENT_SECRET` | blank | Enables OAuth for Linear. |
 | `JIRA_CLIENT_ID`, `JIRA_CLIENT_SECRET` | blank | Enables OAuth for Jira. |
-| `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET` | blank | Enables OAuth for GitHub. |
+| `GITHUB_APP_CLIENT_ID`, `GITHUB_APP_PRIVATE_KEY`, `GITHUB_APP_SLUG`, `GITHUB_APP_WEBHOOK_SECRET` | blank | Enables GitHub App install + auto-refreshing installation tokens (preferred). Passed to app and worker. |
+| `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET` | blank | Legacy classic GitHub OAuth App. Prefer the GitHub App env above. |
 | `GITLAB_CLIENT_ID`, `GITLAB_CLIENT_SECRET` | blank | Enables OAuth for GitLab. |
 | `GITEA_CLIENT_ID`, `GITEA_CLIENT_SECRET` | blank | Enables OAuth for Gitea. |
 | `GITEA_SITE_URL` | `https://gitea.com` | Set for a self-hosted Gitea. |
@@ -61,7 +62,7 @@ Values saved in a workspace take priority. The deployment variables are the fall
 
 - Linear: `read`, `write`
 - Jira: `read:jira-work`, `write:jira-work`, `offline_access`
-- GitHub: classic `repo`, `read:project`, `project` (issues + Projects v2 Status two-way sync)
+- GitHub: GitHub App with Issues R/W, Metadata R, Pull requests R, Projects R/W (see [OAUTH.md](./OAUTH.md))
 - GitLab: `api`, `read_user`
 
 ### Set by Compose, do not set

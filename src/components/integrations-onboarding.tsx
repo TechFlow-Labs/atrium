@@ -6,6 +6,7 @@ import { ChevronRight } from "lucide-react";
 import {
   connectTokenAction,
   disconnectAction,
+  githubAppInstallAction,
   oauthStartAction,
   shareIntegrationAction,
   type ActionState,
@@ -51,6 +52,7 @@ export function IntegrationsOnboarding({
   integrations,
   providers,
   oauth,
+  githubApp = false,
   canAdmin,
   error,
   callbackBase,
@@ -59,6 +61,7 @@ export function IntegrationsOnboarding({
   integrations: IntegrationRow[];
   providers: string[];
   oauth: Record<string, boolean>;
+  githubApp?: boolean;
   canAdmin: boolean;
   error?: string | null;
   callbackBase: string;
@@ -167,7 +170,9 @@ export function IntegrationsOnboarding({
               >
                 <div className="flex items-start justify-between gap-2">
                   <ProviderIcon provider={provider} size="lg" />
-                  {oauth[provider] ? (
+                  {provider === "github" && githubApp ? (
+                    <Badge tone="connected">App ready</Badge>
+                  ) : oauth[provider] ? (
                     <Badge tone="connected">OAuth ready</Badge>
                   ) : isOAuthProvider(provider) ? (
                     <Badge tone="neutral">Setup needed</Badge>
@@ -194,7 +199,9 @@ export function IntegrationsOnboarding({
                   <div>
                     <DialogTitle>Connect {providerLabel(selected)}</DialogTitle>
                     <DialogDescription>
-                      {isOAuthProvider(selected) && !oauth[selected]
+                      {selected === "github" && githubApp
+                        ? "Install the GitHub App on the org or user that owns your repositories. Installation tokens refresh automatically."
+                        : isOAuthProvider(selected) && !oauth[selected]
                         ? `Add the ${providerLabel(selected)} OAuth app once. It is saved to this workspace and used from now on.`
                         : selected === "slack"
                         ? "Paste a Slack bot token (xoxb-…). Create an internal Slack app with channels:history, channels:read, groups:history, groups:read, and users:read, install it, then invite the bot to channels."
@@ -207,25 +214,13 @@ export function IntegrationsOnboarding({
                   </div>
                 </div>
               </DialogHeader>
-              {isOAuthProvider(selected) && !oauth[selected] ? (
-                <>
-                  <OAuthSetupForm workspaceId={workspaceId} provider={selected} callbackBase={callbackBase} />
-                  <div className="flex items-center gap-3 text-xs uppercase tracking-[0.14em] text-muted">
-                    <span className="h-px flex-1 bg-border" />
-                    Or paste a token
-                    <span className="h-px flex-1 bg-border" />
-                  </div>
-                </>
-              ) : null}
-              {!isOAuthProvider(selected) ? <IntegrationGuide provider={selected} callbackBase={callbackBase} defaultOpen /> : null}
-              {oauth[selected] ? (
+              {selected === "github" && githubApp ? (
                 <>
                   <IntegrationGuide provider={selected} callbackBase={callbackBase} />
-                  <form action={oauthStartAction}>
+                  <form action={githubAppInstallAction}>
                     <input type="hidden" name="workspaceId" value={workspaceId} />
-                    <input type="hidden" name="provider" value={selected} />
                     <Button type="submit" className="w-full">
-                      Continue with {providerLabel(selected)}
+                      Install GitHub App
                     </Button>
                   </form>
                   <div className="flex items-center gap-3 text-xs uppercase tracking-[0.14em] text-muted">
@@ -233,6 +228,38 @@ export function IntegrationsOnboarding({
                     Or paste a token
                     <span className="h-px flex-1 bg-border" />
                   </div>
+                </>
+              ) : null}
+              {selected !== "github" || !githubApp ? (
+                <>
+                  {isOAuthProvider(selected) && !oauth[selected] ? (
+                    <>
+                      <OAuthSetupForm workspaceId={workspaceId} provider={selected} callbackBase={callbackBase} />
+                      <div className="flex items-center gap-3 text-xs uppercase tracking-[0.14em] text-muted">
+                        <span className="h-px flex-1 bg-border" />
+                        Or paste a token
+                        <span className="h-px flex-1 bg-border" />
+                      </div>
+                    </>
+                  ) : null}
+                  {!isOAuthProvider(selected) ? <IntegrationGuide provider={selected} callbackBase={callbackBase} defaultOpen /> : null}
+                  {oauth[selected] ? (
+                    <>
+                      <IntegrationGuide provider={selected} callbackBase={callbackBase} />
+                      <form action={oauthStartAction}>
+                        <input type="hidden" name="workspaceId" value={workspaceId} />
+                        <input type="hidden" name="provider" value={selected} />
+                        <Button type="submit" className="w-full">
+                          Continue with {providerLabel(selected)}
+                        </Button>
+                      </form>
+                      <div className="flex items-center gap-3 text-xs uppercase tracking-[0.14em] text-muted">
+                        <span className="h-px flex-1 bg-border" />
+                        Or paste a token
+                        <span className="h-px flex-1 bg-border" />
+                      </div>
+                    </>
+                  ) : null}
                 </>
               ) : null}
               <ConnectForm

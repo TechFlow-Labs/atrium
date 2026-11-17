@@ -175,11 +175,41 @@ export const githubAdapter: IntegrationAdapter = {
   defaultMappings,
   getCapabilities: () => CAPABILITIES,
   async validateConnection(ctx) {
+    if (ctx.credentials.githubInstallationId) {
+      const { data } = await gh<{
+        id: number;
+        account?: { login?: string; id?: number } | null;
+      }>("https://api.github.com/installation", ctx.credentials.accessToken);
+      const login = data.account?.login ?? `installation-${data.id}`;
+      return {
+        accountLabel: ctx.credentials.accountLabel ?? `${login} (GitHub App)`,
+        externalAccountId: String(ctx.credentials.githubInstallationId),
+      };
+    }
     const { data } = await gh<{ id: number; login: string }>("https://api.github.com/user", ctx.credentials.accessToken);
     return { accountLabel: data.login, externalAccountId: String(data.id) };
   },
   async listProjects(ctx, cursor) {
     const page = cursor ?? "1";
+    if (ctx.credentials.githubInstallationId) {
+      const { data, response } = await gh<{
+        repositories: Array<{ full_name: string; name: string; html_url: string }>;
+      }>(
+        `https://api.github.com/installation/repositories?per_page=50&page=${encodeURIComponent(page)}`,
+        ctx.credentials.accessToken,
+      );
+      const link = nextLink(response.headers.get("link"));
+      const next = link ? new URL(link).searchParams.get("page") : null;
+      return {
+        items: (data.repositories ?? []).map((item) => ({
+          providerId: item.full_name,
+          key: item.name,
+          name: item.full_name,
+          url: item.html_url,
+        })),
+        nextCursor: next,
+      };
+    }
     const { data, response } = await gh<Array<{ full_name: string; name: string; html_url: string }>>(
       `https://api.github.com/user/repos?per_page=50&page=${encodeURIComponent(page)}&sort=updated`,
       ctx.credentials.accessToken,

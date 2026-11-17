@@ -56,6 +56,8 @@ export type StoredCredential = {
   cloudId?: string;
   siteUrl?: string;
   accountLabel?: string;
+  /** GitHub App installation id. When set, accessToken is a short-lived installation token. */
+  githubInstallationId?: string;
 };
 
 export type ProviderCapabilities = {

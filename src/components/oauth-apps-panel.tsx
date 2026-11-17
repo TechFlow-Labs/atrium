@@ -21,11 +21,13 @@ export function OAuthAppsPanel({
   canAdmin,
   callbackBase,
   overview,
+  githubApp = false,
 }: {
   workspaceId: string;
   canAdmin: boolean;
   callbackBase: string;
   overview: Record<OAuthProvider, OAuthAppOverview>;
+  githubApp?: boolean;
 }) {
   return (
     <section className="space-y-4">
@@ -33,7 +35,8 @@ export function OAuthAppsPanel({
         <h2 className="text-2xl">OAuth apps</h2>
         <p className="text-sm text-muted">
           Register an OAuth app with each provider and paste its client ID and secret here. Each provider&apos;s callback
-          URL must be added to its app settings. Secrets are encrypted and never shown again.
+          URL must be added to its app settings. Secrets are encrypted and never shown again. GitHub prefers a
+          deployment-wide GitHub App configured in the server environment.
         </p>
       </div>
       <div className="grid gap-4 md:grid-cols-2">
@@ -46,6 +49,7 @@ export function OAuthAppsPanel({
             callbackUrl={`${callbackBase}/api/integrations/oauth/${provider}/callback`}
             callbackBase={callbackBase}
             status={overview[provider]}
+            githubApp={githubApp}
           />
         ))}
       </div>
@@ -60,6 +64,7 @@ function OAuthAppCard({
   callbackUrl,
   callbackBase,
   status,
+  githubApp,
 }: {
   provider: OAuthProvider;
   workspaceId: string;
@@ -67,10 +72,38 @@ function OAuthAppCard({
   callbackUrl: string;
   callbackBase: string;
   status: OAuthAppOverview;
+  githubApp: boolean;
 }) {
   const [state, formAction, pending] = useActionState(saveOAuthAppAction, {});
   const label = OAUTH_PROVIDER_LABELS[provider];
-  const sourceLabel = status.source ? SOURCE_LABELS[status.source] : "Not configured";
+  const sourceLabel =
+    provider === "github" && githubApp
+      ? "GitHub App via environment"
+      : status.source
+        ? SOURCE_LABELS[status.source]
+        : "Not configured";
+
+  if (provider === "github" && githubApp) {
+    return (
+      <article className="space-y-3 rounded-lg border bg-card p-4">
+        <header className="flex items-center justify-between gap-2">
+          <h3 className="text-lg">{label}</h3>
+          <span className="text-xs text-muted">{sourceLabel}</span>
+        </header>
+        <p className="text-sm text-muted">
+          This deployment uses a GitHub App (`GITHUB_APP_*` env). Install it from the GitHub provider card below.
+          Classic OAuth client ID/secret fields are not used while the App is configured.
+        </p>
+        <p className="break-all text-xs text-muted">
+          Setup URL: <span className="font-mono">{callbackBase}/api/integrations/github/setup</span>
+        </p>
+        <p className="break-all text-xs text-muted">
+          Webhook URL: <span className="font-mono">{callbackBase}/api/webhooks/github/app</span>
+        </p>
+        <IntegrationGuide provider={provider} callbackBase={callbackBase} />
+      </article>
+    );
+  }
 
   return (
     <article className="space-y-3 rounded-lg border bg-card p-4">

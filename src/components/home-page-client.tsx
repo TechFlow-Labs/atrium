@@ -61,6 +61,7 @@ type NoProjectsProps = {
   }>;
   providers: string[];
   oauth: Record<string, boolean>;
+  githubApp?: boolean;
   callbackBase: string;
   createAction: (state: ActionState, formData: FormData) => Promise<ActionState>;
 };
@@ -309,6 +310,7 @@ export function HomePageClient({
             integrations={noProjects.integrations}
             providers={noProjects.providers}
             oauth={noProjects.oauth}
+            githubApp={noProjects.githubApp}
             callbackBase={noProjects.callbackBase}
             createAction={noProjects.createAction}
           />

@@ -18,19 +18,18 @@ const GITHUB_OAUTH: IntegrationGuide = {
   provider: "github",
   title: "GitHub",
   needs: [
-    "A GitHub account that can create OAuth apps for the repositories you want to sync.",
-    "Your Atrium address, which is the callback URL shown below.",
+    "Server env GITHUB_APP_CLIENT_ID, GITHUB_APP_PRIVATE_KEY, GITHUB_APP_SLUG, and GITHUB_APP_WEBHOOK_SECRET.",
+    "Permission to install the App on the org or user that owns the repositories.",
   ],
   steps: [
-    "Open GitHub → Settings → Developer settings → OAuth Apps, then choose New OAuth App.",
-    "Application name: Atrium. Homepage URL: your Atrium address.",
-    "Authorization callback URL: {callbackUrl}",
-    "Register the application, then choose Generate a new client secret.",
-    "Copy the Client ID and the Client secret into the GitHub fields in Atrium (or set GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET on the server).",
+    "Create a GitHub App with Issues R/W, Metadata R, Pull requests R, and Projects R/W.",
+    "Homepage: your Atrium address. Setup URL: {callbackBase}/api/integrations/github/setup. Webhook: {callbackBase}/api/webhooks/github/app.",
+    "Put the Client ID, private key PEM, App slug, and webhook secret in the server environment, then redeploy.",
+    "In Atrium, open GitHub → Install GitHub App and choose repositories.",
   ],
   notes: [
-    "Atrium asks for the repo scope so it can read private repository issues.",
-    "An OAuth app has one callback URL. Use a separate app for each Atrium address.",
+    "Installation tokens refresh automatically. Reinstall once if you previously used classic OAuth or a revoked PAT.",
+    "You can still paste a personal access token as a fallback (no auto-refresh).",
   ],
 };
 
@@ -160,6 +159,10 @@ export function integrationGuide(provider: string): IntegrationGuide | null {
   return INTEGRATION_GUIDES[provider] ?? null;
 }
 
-export function fillCallback(text: string, callbackUrl: string): string {
-  return text.split("{callbackUrl}").join(callbackUrl);
+export function fillCallback(text: string, callbackUrl: string, callbackBase = ""): string {
+  return text
+    .split("{callbackUrl}")
+    .join(callbackUrl)
+    .split("{callbackBase}")
+    .join(callbackBase || callbackUrl.replace(/\/api\/integrations\/oauth\/[^/]+\/callback$/, ""));
 }

@@ -34,6 +34,7 @@ type Props = {
   integrations: ComponentProps<typeof IntegrationsOnboarding>["integrations"];
   providers: string[];
   oauth: Record<string, boolean>;
+  githubApp?: boolean;
   mcp: ComponentProps<typeof McpPanel>;
   callbackBase: string;
 };
@@ -97,6 +98,7 @@ export function OnboardingWizard(props: Props) {
                 integrations={props.integrations}
                 providers={props.providers}
                 oauth={props.oauth}
+                githubApp={props.githubApp}
                 canAdmin={props.canAdmin}
                 error={null}
               />

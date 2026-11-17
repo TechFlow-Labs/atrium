@@ -201,7 +201,12 @@ export async function listTaskComments(userId: string, taskId: string): Promise<
       try {
         page = await load(credentials);
       } catch (error) {
-        if (!isUnauthorizedProviderError(error) || !credentials.refreshToken) throw error;
+        if (
+          !isUnauthorizedProviderError(error)
+          || (!credentials.refreshToken && !credentials.githubInstallationId)
+        ) {
+          throw error;
+        }
         const refreshed = await ensureFreshCredentials(
           tx,
           {
@@ -295,7 +300,12 @@ export async function addTaskComment(userId: string, taskId: string, body: strin
         },
       );
     } catch (error) {
-      if (!isUnauthorizedProviderError(error) || !credentials.refreshToken) throw error;
+      if (
+        !isUnauthorizedProviderError(error)
+        || (!credentials.refreshToken && !credentials.githubInstallationId)
+      ) {
+        throw error;
+      }
       const refreshed = await ensureFreshCredentials(
         tx,
         {

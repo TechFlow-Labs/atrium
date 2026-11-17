@@ -35,7 +35,7 @@ async function OnboardingContent() {
     readAppearanceFlags(user.id),
   ]);
   const cookieStore = await cookies();
-  const { providers, oauth } = await providerCatalog(user.id, current.id);
+  const { providers, oauth, githubApp } = await providerCatalog(user.id, current.id);
   const canAdmin = current.role === "owner" || current.role === "admin";
   const workspaceOptions = workspaces.map((workspace) => ({ id: workspace.id, name: workspace.name }));
 
@@ -58,6 +58,7 @@ async function OnboardingContent() {
       integrations={integrations}
       providers={providers}
       oauth={oauth}
+      githubApp={githubApp}
       mcp={{
         serverUrl: mcpServerUrl(),
         workspaces: workspaceOptions,

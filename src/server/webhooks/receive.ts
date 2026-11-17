@@ -13,6 +13,8 @@ export async function receiveWebhook(input: {
   integrationId: string;
   rawBody: string;
   headers: Record<string, string>;
+  /** When true, the caller already verified the signature (e.g. GitHub App env secret). */
+  signatureAlreadyVerified?: boolean;
 }): Promise<{ status: number; body: string }> {
   if (Buffer.byteLength(input.rawBody) > MAX_BYTES) {
     return { status: 413, body: "Payload is too large" };
@@ -38,7 +40,9 @@ export async function receiveWebhook(input: {
     input.headers["linear-signature"] ??
     input.headers["x-fake-signature"] ??
     "";
-  const valid = Boolean(secret && integration.status === "connected" && verifyHmacSha256(secret, input.rawBody, signature));
+  const valid = input.signatureAlreadyVerified
+    ? integration.status === "connected"
+    : Boolean(secret && integration.status === "connected" && verifyHmacSha256(secret, input.rawBody, signature));
   let parsed: unknown = {};
   if (valid) {
     try {

@@ -1,6 +1,6 @@
 # Provider OAuth setup
 
-Atrium can connect Linear, Jira Cloud, GitHub, GitLab, and Gitea through each provider’s authorize screen. Without OAuth client credentials, admins can still paste a personal access token.
+Atrium can connect Linear, Jira Cloud, GitLab, and Gitea through each provider’s authorize screen. GitHub uses a **GitHub App** (installation tokens that refresh automatically). Without OAuth or App credentials, admins can still paste a personal access token.
 
 OAuth is enabled per provider when both env vars are set:
 
@@ -9,37 +9,60 @@ OAuth is enabled per provider when both env vars are set:
 {PROVIDER}_CLIENT_SECRET=...
 ```
 
-`BETTER_AUTH_URL` must be the public origin Atrium is served from (no trailing slash). Callback URLs are derived from it:
+`BETTER_AUTH_URL` must be the public origin Atrium is served from (no trailing slash). Classic OAuth callback URLs are:
 
 ```text
 {BETTER_AUTH_URL}/api/integrations/oauth/{provider}/callback
 ```
 
-Print the URLs for your current env:
+Print those URLs for your current env:
 
 ```bash
 pnpm oauth:redirects
 ```
 
-## GitHub
+## GitHub (GitHub App)
 
-1. Open [GitHub Developer Settings → OAuth Apps](https://github.com/settings/developers) → **New OAuth App**.
-2. Application name: `Atrium` (or your deployment name).
-3. Homepage URL: your `BETTER_AUTH_URL` (local: `http://127.0.0.1:38471`).
-4. Authorization callback URL: `{BETTER_AUTH_URL}/api/integrations/oauth/github/callback`.
-5. Create the app, then generate a **Client secret**.
-6. Put both values in `.env.local`:
+Prefer a deployment-wide **GitHub App**. Atrium mints short-lived installation tokens with the App private key, so sync does not depend on a long-lived user OAuth token.
+
+### Create the App
+
+1. Open [GitHub → Developer settings → GitHub Apps](https://github.com/settings/apps) → **New GitHub App**.
+2. **GitHub App name:** `Atrium` (or your deployment name).
+3. **Homepage URL:** your `BETTER_AUTH_URL` (production: `https://atrium.techflowlabs.gr`; local: `http://127.0.0.1:38471`).
+4. **Callback URL:** not required for installation-only auth. You can leave user authorization disabled.
+5. **Setup URL (optional):** `{BETTER_AUTH_URL}/api/integrations/github/setup` — Atrium also accepts this as the post-install redirect when the install flow includes `state`.
+6. **Webhook:** active. **Webhook URL:** `{BETTER_AUTH_URL}/api/webhooks/github/app`. Set a webhook secret and keep it for env.
+7. **Repository permissions:** Issues Read & write, Metadata Read-only, Pull requests Read-only.
+8. **Organization permissions** (and/or account): Projects Read & write (Projects v2 Status).
+9. **Subscribe to events:** Issues, Pull request, Projects v2 item (and related project item events as listed in the App UI).
+10. Create the App, note the **App slug** (from the public page URL `github.com/apps/{slug}`), **Client ID**, and generate a **private key** (`.pem`).
+
+### Env
+
+Put these in `/opt/atrium/.env` (production) or `.env.local` (dev). Compose passes them into **app** and **worker**:
 
 ```bash
-GITHUB_CLIENT_ID=Iv1...
-GITHUB_CLIENT_SECRET=...
+GITHUB_APP_CLIENT_ID=Iv23...
+GITHUB_APP_PRIVATE_KEY="-----BEGIN RSA PRIVATE KEY-----\n...\n-----END RSA PRIVATE KEY-----"
+GITHUB_APP_SLUG=atrium
+GITHUB_APP_WEBHOOK_SECRET=...
 ```
 
-7. Restart `pnpm dev`.
+Use literal `\n` in the PEM string if the secret is a single line. Restart / redeploy after changing env.
 
-Atrium requests `repo`, `read:project`, and `project` so private repository issues and GitHub Projects v2 Status can sync both ways. After authorize, you land on the integration page to link repositories. Reconnect an existing GitHub integration after upgrading scopes so Project Status writes succeed.
+### Connect in Atrium
 
-For inbound Project board moves, register the integration webhook (`/api/webhooks/github/{integrationId}`) on the organization or user that owns the Project, and include the **Projects v2 item** event (plus the usual **Issues** events on the repository).
+1. As an owner/admin, open **Integrations**.
+2. Choose GitHub → **Install GitHub App**.
+3. Pick the org or user and the repositories Atrium may access.
+4. After redirect back, open the integration and link repositories. Project Status sync uses the mapped Projects v2 board (see the project **Manage** section).
+
+Reinstall once if you previously connected with a classic OAuth App or a dead PAT — Dead letters with `Bad credentials` clear after a successful App install and retry.
+
+### Legacy classic OAuth
+
+`GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET` still enable the old user OAuth path when no GitHub App env is set. Prefer the App. Tokens from classic OAuth are not refreshed automatically.
 
 ## GitLab.com
 
@@ -102,16 +125,17 @@ JIRA_CLIENT_SECRET=...
 ## Local checklist
 
 1. `BETTER_AUTH_URL` matches the browser origin (`http://127.0.0.1:38471` for `pnpm dev`).
-2. Callback URLs in the provider consoles match `pnpm oauth:redirects` exactly.
-3. Client id/secret are in `.env.local` and the Next.js process was restarted.
-4. On **Integrations**, open a provider card — **Continue with … OAuth** appears when that provider is configured.
-5. After consent, Atrium stores an encrypted credential and opens the integration so you can link projects.
+2. For GitHub App: Client ID, private key, slug, and webhook secret are set; Setup and Webhook URLs match `BETTER_AUTH_URL`.
+3. For other providers: callback URLs in the provider consoles match `pnpm oauth:redirects` exactly.
+4. Env is loaded and the app (and worker, in production) was restarted.
+5. On **Integrations**, GitHub shows **Install GitHub App** when App env is configured; other providers show **Continue with …** when OAuth is configured.
 
 ## Troubleshooting
 
 | Symptom | Likely cause |
 | --- | --- |
-| No OAuth button | Missing `{PROVIDER}_CLIENT_ID` / `_CLIENT_SECRET`, or server not restarted |
-| `redirect_uri` mismatch | Callback URL in the provider console differs from `BETTER_AUTH_URL` |
-| OAuth state expired | Took longer than 15 minutes; start again from Integrations |
-| Provider error query on `/integrations` | User denied consent, or the provider rejected the app settings |
+| No Install / OAuth button | Missing App or `{PROVIDER}_CLIENT_*` env, or server not restarted |
+| `redirect_uri` / Setup URL mismatch | URL in the GitHub App settings differs from `BETTER_AUTH_URL` |
+| OAuth / install state expired | Took longer than 15 minutes; start again from Integrations |
+| Dead letters `Bad credentials` | Legacy OAuth/PAT revoked; Install the GitHub App and retry |
+| Webhook `/app` 500 | Old deploy without the static App webhook route; redeploy |

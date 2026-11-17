@@ -10,6 +10,12 @@ import { giteaOAuthSiteUrl } from "./gitea-site";
 const REFRESH_SKEW_MS = 2 * 60 * 1000;
 
 export function credentialNeedsRefresh(credential: StoredCredential): boolean {
+  if (credential.githubInstallationId) {
+    if (!credential.accessToken || !credential.expiresAt) return true;
+    const expiresAt = Date.parse(credential.expiresAt);
+    if (Number.isNaN(expiresAt)) return true;
+    return expiresAt <= Date.now() + REFRESH_SKEW_MS;
+  }
   if (!credential.refreshToken) return false;
   if (!credential.expiresAt) return false;
   const expiresAt = Date.parse(credential.expiresAt);
@@ -163,12 +169,12 @@ async function refreshWithApp(
     };
   }
 
-  // GitHub OAuth apps issue non-expiring tokens; nothing to refresh.
+  // Classic GitHub OAuth apps issue non-expiring tokens; nothing to refresh here.
   return credential;
 }
 
 /**
- * Proactively refresh OAuth access tokens before calling a provider.
+ * Proactively refresh OAuth / GitHub App access tokens before calling a provider.
  * Persists the rotated credential so workers and page loads share the new token.
  */
 export async function ensureFreshCredentials(
@@ -194,6 +200,22 @@ export async function ensureFreshCredentials(
   if (!credentials) {
     throw new ProviderError("Integration is disconnected", "unauthorized", false);
   }
+
+  if (input.provider === "github" && credentials.githubInstallationId) {
+    if (!force && !credentialNeedsRefresh(credentials)) return credentials;
+    const { refreshGithubAppCredential } = await import("./github-app");
+    const next = await refreshGithubAppCredential(credentials);
+    await tx.execute(sql`
+      update integrations
+      set credential_ciphertext = ${sealCredential(next)},
+          last_error = null,
+          status = 'connected',
+          last_validated_at = now()
+      where id = ${input.integrationId}::uuid
+    `);
+    return next;
+  }
+
   if (!credentials.refreshToken) return credentials;
   if (!force && !credentialNeedsRefresh(credentials)) return credentials;
   if (!isOAuthProvider(input.provider) || input.provider === "github") return credentials;

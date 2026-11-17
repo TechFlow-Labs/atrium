@@ -171,6 +171,33 @@ describe("provider adapters", () => {
     expect(githubAdapter.getCapabilities().fields.dueDate).toBe(false);
   });
 
+  it("lists installation repositories for GitHub App credentials", async () => {
+    setProviderFetch(async (url) => {
+      if (url.endsWith("/installation")) {
+        return json({ id: 99, account: { login: "acme", id: 1 } });
+      }
+      if (url.includes("/installation/repositories")) {
+        return json({
+          repositories: [{ full_name: "acme/api", name: "api", html_url: "https://github.com/acme/api" }],
+        });
+      }
+      return json({}, 404);
+    });
+    const appCtx = {
+      ...ctx,
+      credentials: {
+        accessToken: "ghs_token",
+        githubInstallationId: "99",
+        expiresAt: new Date(Date.now() + 3_600_000).toISOString(),
+      },
+      mappings: githubAdapter.defaultMappings(),
+    };
+    const account = await githubAdapter.validateConnection(appCtx);
+    expect(account.externalAccountId).toBe("99");
+    const page = await githubAdapter.listProjects(appCtx, null);
+    expect(page.items[0]?.providerId).toBe("acme/api");
+  });
+
   it("parses GitHub issue and pull request webhooks", async () => {
     setProviderFetch(async (url) => {
       if (url.includes("graphql")) {

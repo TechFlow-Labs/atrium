@@ -837,6 +837,18 @@ export async function oauthStartAction(formData: FormData): Promise<void> {
   }
 }
 
+export async function githubAppInstallAction(formData: FormData): Promise<void> {
+  try {
+    const { beginGithubAppInstall } = await import("@/server/integrations/github-app");
+    const url = await beginGithubAppInstall(await userId(), String(formData.get("workspaceId")));
+    redirect(url);
+  } catch (error) {
+    unstable_rethrow(error);
+    const message = error instanceof Error ? error.message : "Could not start GitHub App install";
+    redirect(`/integrations?error=${encodeURIComponent(message)}`);
+  }
+}
+
 export async function linkProjectAction(_state: ActionState, formData: FormData): Promise<ActionState> {
   let id: string;
   try {

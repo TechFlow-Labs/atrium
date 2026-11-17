@@ -5,6 +5,7 @@ import Link from "next/link";
 import { ChevronRight, FolderKanban, Plus } from "lucide-react";
 import {
   connectTokenAction,
+  githubAppInstallAction,
   oauthStartAction,
   type ActionState,
 } from "@/app/actions";
@@ -47,6 +48,7 @@ export function HomeNoProjects({
   integrations,
   providers,
   oauth,
+  githubApp = false,
   callbackBase,
   createAction,
 }: {
@@ -55,6 +57,7 @@ export function HomeNoProjects({
   integrations: IntegrationRow[];
   providers: string[];
   oauth: Record<string, boolean>;
+  githubApp?: boolean;
   callbackBase: string;
   createAction: (state: ActionState, formData: FormData) => Promise<ActionState>;
 }) {
@@ -160,7 +163,9 @@ export function HomeNoProjects({
                       >
                         <div className="flex items-start justify-between gap-2">
                           <ProviderIcon provider={provider} />
-                          {oauth[provider] ? (
+                          {provider === "github" && githubApp ? (
+                            <Badge tone="connected">App</Badge>
+                          ) : oauth[provider] ? (
                             <Badge tone="connected">OAuth</Badge>
                           ) : (
                             <Badge tone="neutral">Token</Badge>
@@ -214,7 +219,9 @@ export function HomeNoProjects({
                   <div>
                     <DialogTitle>Connect {providerLabel(selected)}</DialogTitle>
                     <DialogDescription>
-                      {isOAuthProvider(selected) && !oauth[selected]
+                      {selected === "github" && githubApp
+                        ? "Install the GitHub App on the account that owns your repositories."
+                        : isOAuthProvider(selected) && !oauth[selected]
                         ? `Add the ${providerLabel(selected)} OAuth app once, then connect this workspace.`
                         : oauth[selected]
                           ? `Sign in with ${providerLabel(selected)}, or paste an access token.`
@@ -223,6 +230,24 @@ export function HomeNoProjects({
                   </div>
                 </div>
               </DialogHeader>
+              {selected === "github" && githubApp ? (
+                <>
+                  <IntegrationGuide provider={selected} callbackBase={callbackBase} />
+                  <form action={githubAppInstallAction}>
+                    <input type="hidden" name="workspaceId" value={workspaceId} />
+                    <Button type="submit" className="w-full">
+                      Install GitHub App
+                    </Button>
+                  </form>
+                  <div className="flex items-center gap-3 text-xs uppercase tracking-[0.14em] text-muted">
+                    <span className="h-px flex-1 bg-border" />
+                    Or paste a token
+                    <span className="h-px flex-1 bg-border" />
+                  </div>
+                </>
+              ) : null}
+              {selected !== "github" || !githubApp ? (
+                <>
               {isOAuthProvider(selected) && !oauth[selected] ? (
                 <>
                   <OAuthSetupForm workspaceId={workspaceId} provider={selected} callbackBase={callbackBase} />
@@ -248,6 +273,8 @@ export function HomeNoProjects({
                     Or paste a token
                     <span className="h-px flex-1 bg-border" />
                   </div>
+                </>
+              ) : null}
                 </>
               ) : null}
               <ConnectForm

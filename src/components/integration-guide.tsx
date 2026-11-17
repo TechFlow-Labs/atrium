@@ -27,7 +27,7 @@ export function IntegrationGuide({
           <p className="text-xs font-medium uppercase tracking-[0.14em] text-muted">What you need</p>
           <ul className="mt-2 list-disc space-y-1 pl-5 text-muted">
             {guide.needs.map((item) => (
-              <li key={item}>{fillCallback(item, callbackUrl)}</li>
+              <li key={item}>{fillCallback(item, callbackUrl, callbackBase)}</li>
             ))}
           </ul>
         </div>
@@ -35,7 +35,7 @@ export function IntegrationGuide({
           <p className="text-xs font-medium uppercase tracking-[0.14em] text-muted">Steps</p>
           <ol className="mt-2 list-decimal space-y-2 pl-5">
             {guide.steps.map((step) => (
-              <li key={step}>{fillCallback(step, callbackUrl)}</li>
+              <li key={step}>{fillCallback(step, callbackUrl, callbackBase)}</li>
             ))}
           </ol>
         </div>
@@ -48,7 +48,7 @@ export function IntegrationGuide({
         {guide.notes?.length ? (
           <ul className="list-disc space-y-1 pl-5 text-xs text-muted">
             {guide.notes.map((note) => (
-              <li key={note}>{fillCallback(note, callbackUrl)}</li>
+              <li key={note}>{fillCallback(note, callbackUrl, callbackBase)}</li>
             ))}
           </ul>
         ) : null}

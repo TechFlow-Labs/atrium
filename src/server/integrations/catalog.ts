@@ -1,3 +1,4 @@
+import { isGithubAppConfigured } from "./github-app";
 import { oauthAppOverview, type OAuthAppOverview } from "./oauth-apps";
 import { listAdapterProviders } from "./registry";
 import { CHAT_PROVIDERS, NOTE_PROVIDERS } from "./types";
@@ -12,6 +13,7 @@ export async function providerCatalog(
   providers: string[];
   oauth: Record<string, boolean>;
   overview: Record<OAuthProvider, OAuthAppOverview>;
+  githubApp: boolean;
 }> {
   const providers = [
     ...listAdapterProviders().filter((provider) => provider !== "fake"),
@@ -19,11 +21,13 @@ export async function providerCatalog(
     ...NOTE_PROVIDERS,
   ];
   const overview = await oauthAppOverview(userId, workspaceId);
+  const githubApp = isGithubAppConfigured();
   const oauth = Object.fromEntries(
     providers.map((provider) => {
+      if (provider === "github" && githubApp) return [provider, true] as const;
       const status = overview[provider as OAuthProvider];
       return [provider, Boolean(status?.source)] as const;
     }),
   );
-  return { providers, oauth, overview };
+  return { providers, oauth, overview, githubApp };
 }

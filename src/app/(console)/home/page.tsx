@@ -110,6 +110,7 @@ async function HomeContent({
               integrations: taskIntegrations,
               providers: taskProviders,
               oauth: catalog?.oauth ?? {},
+              githubApp: catalog?.githubApp ?? false,
               callbackBase,
               createAction: createProjectAction,
             }
