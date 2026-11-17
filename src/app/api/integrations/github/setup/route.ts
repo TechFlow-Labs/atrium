@@ -1,8 +1,10 @@
+import { connection } from "next/server";
 import { redirect } from "next/navigation";
 import { getSessionUser } from "@/server/auth/session";
 import { completeGithubAppInstall } from "@/server/integrations/github-app";
 
 export async function GET(request: Request) {
+  await connection();
   const user = await getSessionUser();
   if (!user) redirect("/login");
 
