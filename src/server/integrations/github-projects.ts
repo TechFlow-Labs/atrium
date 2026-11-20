@@ -46,14 +46,58 @@ function splitRepo(providerProjectId: string): { owner: string; name: string } {
   return { owner, name };
 }
 
+type ProjectV2Node = { id: string; title: string; number: number; url: string };
+
+type OwnerProjectNode = ProjectV2Node & {
+  repositories?: { nodes: Array<{ nameWithOwner: string } | null> | null } | null;
+};
+
+function asProjectNodes(
+  nodes: Array<ProjectV2Node | null> | null | undefined,
+): ProjectV2Node[] {
+  return (nodes ?? []).filter(
+    (node): node is ProjectV2Node => Boolean(node?.id && node.url),
+  );
+}
+
+/**
+ * Lists GitHub Projects v2 boards for a repository.
+ * Repo-linked boards come first. When `includeOwnerProjects` is true, also appends
+ * org/user boards (linked-to-this-repo first, then the rest) so Manage/create can
+ * pick org-level boards that repository.projectsV2 alone omits.
+ */
 export async function listRepositoryProjectsV2(
   token: string,
   providerProjectId: string,
-): Promise<Array<{ id: string; title: string; number: number; url: string }>> {
+  options?: { includeOwnerProjects?: boolean },
+): Promise<ProjectV2Node[]> {
   const { owner, name } = splitRepo(providerProjectId);
+  const fullName = `${owner}/${name}`;
+  const includeOwner = Boolean(options?.includeOwnerProjects);
+
+  if (!includeOwner) {
+    const data = await githubGraphql<{
+      repository: { projectsV2: { nodes: Array<ProjectV2Node | null> } } | null;
+    }>(
+      token,
+      `query($owner: String!, $name: String!) {
+        repository(owner: $owner, name: $name) {
+          projectsV2(first: 20) {
+            nodes { id title number url }
+          }
+        }
+      }`,
+      { owner, name },
+    );
+    return asProjectNodes(data.repository?.projectsV2.nodes);
+  }
+
   const data = await githubGraphql<{
     repository: {
-      projectsV2: { nodes: Array<{ id: string; title: string; number: number; url: string } | null> };
+      projectsV2: { nodes: Array<ProjectV2Node | null> };
+      owner: {
+        projectsV2?: { nodes: Array<OwnerProjectNode | null> };
+      } | null;
     } | null;
   }>(
     token,
@@ -62,14 +106,77 @@ export async function listRepositoryProjectsV2(
         projectsV2(first: 20) {
           nodes { id title number url }
         }
+        owner {
+          ... on Organization {
+            projectsV2(first: 40, orderBy: { field: UPDATED_AT, direction: DESC }) {
+              nodes {
+                id title number url
+                repositories(first: 20) { nodes { nameWithOwner } }
+              }
+            }
+          }
+          ... on User {
+            projectsV2(first: 40, orderBy: { field: UPDATED_AT, direction: DESC }) {
+              nodes {
+                id title number url
+                repositories(first: 20) { nodes { nameWithOwner } }
+              }
+            }
+          }
+        }
       }
     }`,
     { owner, name },
   );
-  return (data.repository?.projectsV2.nodes ?? []).filter(
-    (node): node is { id: string; title: string; number: number; url: string } =>
-      Boolean(node?.id && node.url),
+
+  const repoLinked = asProjectNodes(data.repository?.projectsV2.nodes);
+  const ownerNodes = (data.repository?.owner?.projectsV2?.nodes ?? []).filter(
+    (node): node is OwnerProjectNode => Boolean(node?.id && node.url),
   );
+  const ownerLinked: ProjectV2Node[] = [];
+  const ownerOther: ProjectV2Node[] = [];
+  for (const node of ownerNodes) {
+    const linked = (node.repositories?.nodes ?? []).some(
+      (repo) => repo?.nameWithOwner?.toLowerCase() === fullName.toLowerCase(),
+    );
+    const entry = { id: node.id, title: node.title, number: node.number, url: node.url };
+    if (linked) ownerLinked.push(entry);
+    else ownerOther.push(entry);
+  }
+
+  const seen = new Set(repoLinked.map((board) => board.id));
+  const merged = [...repoLinked];
+  for (const board of [...ownerLinked, ...ownerOther]) {
+    if (seen.has(board.id)) continue;
+    seen.add(board.id);
+    merged.push(board);
+  }
+  return merged;
+}
+
+/**
+ * Picks a likely board when none is saved.
+ * Only suggests when there is a single board, or a unique title match on a repo name token.
+ */
+export function suggestGithubBoard(
+  boards: ProjectV2Node[],
+  providerProjectId: string,
+): ProjectV2Node | null {
+  if (boards.length === 0) return null;
+  if (boards.length === 1) return boards[0] ?? null;
+
+  const shortName = providerProjectId.split("/")[1]?.toLowerCase() ?? "";
+  const tokens = shortName
+    .split(/[^a-z0-9]+/i)
+    .map((token) => token.trim().toLowerCase())
+    .filter((token) => token.length >= 4);
+  if (tokens.length === 0) return null;
+
+  const matches = boards.filter((board) => {
+    const title = board.title.toLowerCase();
+    return tokens.some((token) => title.includes(token));
+  });
+  return matches.length === 1 ? (matches[0] ?? null) : null;
 }
 
 export async function getGithubProjectUrl(

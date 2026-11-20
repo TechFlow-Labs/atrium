@@ -475,7 +475,7 @@ async function ProjectContent({ params }: { params: Promise<{ projectId: string 
                         {
                           value: "",
                           label: githubBoards.length
-                            ? "Auto (first board on the repository)"
+                            ? "Auto (first board linked to the repository)"
                             : "No boards found — reconnect GitHub with project scopes",
                         },
                         ...githubBoards.map((board) => ({

@@ -23,6 +23,7 @@ import { workspaceContext } from "@/server/auth/workspace";
 import { listIntegrations } from "@/server/integrations/service";
 import { isTaskProvider } from "@/server/integrations/types";
 import { getProduct } from "@/server/products/service";
+import { enrichGithubBoardTitles } from "@/server/projects/panel";
 import { listProjects } from "@/server/projects/service";
 
 export const instant = false;
@@ -56,10 +57,11 @@ async function ProductDetailContent({
   const product = await getProduct(user.id, current.id, productId);
   if (!product) notFound();
 
-  const [projects, integrations] = await Promise.all([
+  const [listedProjects, integrations] = await Promise.all([
     listProjects(user.id, current.id, { status: "all", productId }),
     listIntegrations(user.id, current.id),
   ]);
+  const projects = await enrichGithubBoardTitles(user.id, current.id, listedProjects);
   const canWrite = current.role === "owner" || current.role === "admin";
   const linkableIntegrations = integrations
     .filter(

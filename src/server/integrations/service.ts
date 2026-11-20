@@ -622,7 +622,9 @@ export async function listGithubBoardsForRepo(
       ciphertext: row.credential_ciphertext,
     });
     try {
-      return await listRepositoryProjectsV2(credentials.accessToken, providerProjectId);
+      return await listRepositoryProjectsV2(credentials.accessToken, providerProjectId, {
+        includeOwnerProjects: true,
+      });
     } catch {
       return [];
     }
@@ -662,7 +664,9 @@ export async function listGithubProjectsForConnection(
       ciphertext: row.credential_ciphertext,
     });
     try {
-      return await listRepositoryProjectsV2(credentials.accessToken, row.provider_project_id);
+      return await listRepositoryProjectsV2(credentials.accessToken, row.provider_project_id, {
+        includeOwnerProjects: true,
+      });
     } catch {
       return [];
     }
