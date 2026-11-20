@@ -544,6 +544,92 @@ export async function ensureExternalProjectForTask(
   return createExternalProject(userId, workspaceId, input);
 }
 
+/** Points an existing project connection at a different provider repo/project. */
+export async function updateProjectCodebase(
+  userId: string,
+  workspaceId: string,
+  projectId: string,
+  input: {
+    providerProjectId: string;
+    name: string;
+    key?: string | null;
+    url?: string | null;
+  },
+): Promise<void> {
+  await withUser(userId, async (tx) => {
+    await requireAction(tx, workspaceId, "project.update");
+    const nextId = input.providerProjectId.trim();
+    if (!nextId) throw new Error("Choose a codebase");
+    const name = input.name.trim() || nextId;
+
+    const rows = await tx.execute<{
+      id: string;
+      integration_id: string;
+      provider_project_id: string;
+      provider_project_name: string;
+      field_mappings: FieldMappings | null;
+    }>(sql`
+      select id, integration_id, provider_project_id, provider_project_name, field_mappings
+      from project_connections
+      where project_id = ${projectId}::uuid and workspace_id = ${workspaceId}::uuid
+    `);
+    const connection = rows[0];
+    if (!connection) throw new Error("Project connection not found");
+
+    if (nextId !== connection.provider_project_id) {
+      const conflict = await findLinkedProjectId(tx, workspaceId, connection.integration_id, nextId);
+      if (conflict && conflict !== projectId) {
+        throw new Error("That codebase is already linked to another project");
+      }
+    }
+
+    const prev = connection.field_mappings ?? {};
+    const repoChanged = nextId !== connection.provider_project_id;
+    const nextMappings: FieldMappings = { ...prev };
+    if (repoChanged) {
+      delete nextMappings.githubProjectNodeId;
+      delete nextMappings.githubProjectTitle;
+    }
+
+    await tx.execute(sql`
+      update project_connections
+      set provider_project_id = ${nextId},
+          provider_project_key = ${input.key ?? null},
+          provider_project_name = ${name},
+          provider_project_url = ${input.url ?? null},
+          field_mappings = ${JSON.stringify(nextMappings)}::jsonb,
+          updated_at = now()
+      where id = ${connection.id}::uuid
+    `);
+
+    await tx.execute(sql`
+      update projects
+      set name = case
+            when name = ${connection.provider_project_id}
+              or name = ${connection.provider_project_name}
+              then ${name}
+            else name
+          end,
+          updated_at = now()
+      where id = ${projectId}::uuid and workspace_id = ${workspaceId}::uuid
+    `);
+
+    if (repoChanged) {
+      await tx.execute(sql`select enqueue_initial_reconcile(${connection.id}::uuid)`);
+    }
+    await writeAudit(tx, {
+      workspaceId,
+      action: "project.codebase_updated",
+      entityType: "project",
+      entityId: projectId,
+      metadata: {
+        from: connection.provider_project_id,
+        to: nextId,
+      },
+    });
+  });
+}
+
 export async function updateFieldMappings(
   userId: string,
   workspaceId: string,

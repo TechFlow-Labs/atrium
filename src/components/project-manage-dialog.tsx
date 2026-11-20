@@ -1,8 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { Settings2 } from "lucide-react";
-import { mappingAction, publishAction, updateProjectAction } from "@/app/actions";
+import {
+  listGithubBoardsForCreateAction,
+  listRemoteProjectsForCreateAction,
+  mappingAction,
+  publishAction,
+  updateProjectAction,
+} from "@/app/actions";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -22,6 +28,13 @@ type GithubBoard = {
   url: string;
 };
 
+type RemoteProjectOption = {
+  providerId: string;
+  name: string;
+  key: string | null;
+  url: string | null;
+};
+
 type FieldMappings = {
   status?: Record<string, string>;
   priority?: Record<string, string>;
@@ -33,7 +46,7 @@ export function ProjectManageDialog({
   project,
   products,
   mappings,
-  githubBoards,
+  githubBoards: initialGithubBoards,
 }: {
   workspaceId: string;
   project: {
@@ -44,6 +57,9 @@ export function ProjectManageDialog({
     ownership_mode: "native" | "external" | "hybrid";
     product_id: string | null;
     provider: string | null;
+    provider_project_id: string | null;
+    provider_project_name: string | null;
+    provider_project_url: string | null;
     integration_id: string | null;
     publish_outbound: boolean;
   };
@@ -53,6 +69,89 @@ export function ProjectManageDialog({
 }) {
   const [open, setOpen] = useState(false);
   const map = mappings ?? null;
+  const isGithub = project.provider === "github";
+  const canEditCodebase = Boolean(project.integration_id && project.provider_project_id);
+
+  const [remotes, setRemotes] = useState<RemoteProjectOption[]>([]);
+  const [remoteError, setRemoteError] = useState<string | null>(null);
+  const [loadingRemotes, startLoadRemotes] = useTransition();
+  const [selectedCodebaseId, setSelectedCodebaseId] = useState(
+    project.provider_project_id ?? "",
+  );
+  const [boards, setBoards] = useState<GithubBoard[]>(initialGithubBoards);
+  const [boardId, setBoardId] = useState(map?.githubProjectNodeId ?? "");
+  const [loadingBoards, startLoadBoards] = useTransition();
+
+  const selectedRemote = useMemo(
+    () => remotes.find((remote) => remote.providerId === selectedCodebaseId) ?? null,
+    [remotes, selectedCodebaseId],
+  );
+
+  const codebaseOptions = useMemo(() => {
+    const options = remotes.map((remote) => ({
+      value: remote.providerId,
+      label: remote.name,
+      description: remote.key || remote.providerId,
+    }));
+    if (
+      selectedCodebaseId
+      && !options.some((option) => option.value === selectedCodebaseId)
+    ) {
+      options.unshift({
+        value: selectedCodebaseId,
+        label: project.provider_project_name || selectedCodebaseId,
+        description: selectedCodebaseId,
+      });
+    }
+    return options;
+  }, [remotes, selectedCodebaseId, project.provider_project_name]);
+
+  useEffect(() => {
+    if (!open || !canEditCodebase || !project.integration_id) return;
+    startLoadRemotes(async () => {
+      const result = await listRemoteProjectsForCreateAction(
+        workspaceId,
+        project.integration_id!,
+      );
+      if ("error" in result) {
+        setRemoteError(result.error);
+        setRemotes([]);
+        return;
+      }
+      setRemoteError(null);
+      setRemotes(result.projects);
+    });
+  }, [open, canEditCodebase, project.integration_id, workspaceId]);
+
+  useEffect(() => {
+    if (!open) return;
+    setSelectedCodebaseId(project.provider_project_id ?? "");
+    setBoardId(map?.githubProjectNodeId ?? "");
+    setBoards(initialGithubBoards);
+  }, [open, project.provider_project_id, map?.githubProjectNodeId, initialGithubBoards]);
+
+  function onCodebaseChange(nextId: string) {
+    setSelectedCodebaseId(nextId);
+    if (!isGithub || !project.integration_id || !nextId) return;
+    if (nextId === project.provider_project_id) {
+      setBoards(initialGithubBoards);
+      setBoardId(map?.githubProjectNodeId ?? "");
+      return;
+    }
+    setBoardId("");
+    startLoadBoards(async () => {
+      const result = await listGithubBoardsForCreateAction(
+        workspaceId,
+        project.integration_id!,
+        nextId,
+      );
+      if ("error" in result) {
+        setBoards([]);
+        return;
+      }
+      setBoards(result.boards);
+    });
+  }
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -74,6 +173,25 @@ export function ProjectManageDialog({
           <form action={updateProjectAction} className="grid gap-3 md:grid-cols-2">
             <input type="hidden" name="workspaceId" value={workspaceId} />
             <input type="hidden" name="projectId" value={project.id} />
+            {canEditCodebase ? (
+              <>
+                <input
+                  type="hidden"
+                  name="providerProjectName"
+                  value={selectedRemote?.name || project.provider_project_name || selectedCodebaseId}
+                />
+                <input
+                  type="hidden"
+                  name="providerProjectKey"
+                  value={selectedRemote?.key ?? ""}
+                />
+                <input
+                  type="hidden"
+                  name="providerProjectUrl"
+                  value={selectedRemote?.url || project.provider_project_url || ""}
+                />
+              </>
+            ) : null}
             <div>
               <Label htmlFor="manage-nickname">Nickname</Label>
               <Input
@@ -100,6 +218,40 @@ export function ProjectManageDialog({
                 </p>
               ) : null}
             </div>
+            {canEditCodebase ? (
+              <div className="md:col-span-2">
+                <Label htmlFor="manage-codebase">
+                  {isGithub ? "Codebase" : "Provider project"}
+                </Label>
+                <MenuSelect
+                  id="manage-codebase"
+                  name="providerProjectId"
+                  className="mt-1"
+                  aria-label={isGithub ? "Codebase" : "Provider project"}
+                  value={selectedCodebaseId}
+                  onValueChange={onCodebaseChange}
+                  disabled={loadingRemotes || codebaseOptions.length === 0}
+                  required
+                  options={codebaseOptions}
+                  placeholder={
+                    loadingRemotes
+                      ? "Loading…"
+                      : isGithub
+                        ? "Select a repository"
+                        : "Select a project"
+                  }
+                />
+                {remoteError ? (
+                  <p className="mt-1 text-xs text-destructive">{remoteError}</p>
+                ) : (
+                  <p className="mt-1 text-xs text-muted">
+                    {isGithub
+                      ? "Changing the repository clears the linked Project board until you pick one again."
+                      : "Changing the linked provider project restarts inbound sync for this connection."}
+                  </p>
+                )}
+              </div>
+            ) : null}
             <div className="md:col-span-2">
               <Label htmlFor="manage-description">Description</Label>
               <Textarea
@@ -159,7 +311,7 @@ export function ProjectManageDialog({
               </p>
               <input type="hidden" name="workspaceId" value={workspaceId} />
               <input type="hidden" name="projectId" value={project.id} />
-              {project.provider === "github" ? (
+              {isGithub ? (
                 <div className="mt-3">
                   <Label htmlFor="manage-githubProjectNodeId">GitHub Project board</Label>
                   <MenuSelect
@@ -167,23 +319,27 @@ export function ProjectManageDialog({
                     name="githubProjectNodeId"
                     className="mt-1"
                     aria-label="GitHub Project board"
-                    defaultValue={map.githubProjectNodeId ?? ""}
+                    value={boardId}
+                    onValueChange={setBoardId}
+                    disabled={loadingBoards}
                     options={[
                       {
                         value: "",
-                        label: githubBoards.length
-                          ? "Auto (first board linked to the repository)"
-                          : "No boards found — reconnect GitHub with project scopes",
+                        label: loadingBoards
+                          ? "Loading boards…"
+                          : boards.length
+                            ? "Auto (first board linked to the repository)"
+                            : "No boards found — reconnect GitHub with project scopes",
                       },
-                      ...githubBoards.map((board) => ({
+                      ...boards.map((board) => ({
                         value: board.id,
                         label: `${board.title} (#${board.number})`,
                       })),
-                      ...(map.githubProjectNodeId
-                        && !githubBoards.some((board) => board.id === map.githubProjectNodeId)
+                      ...(boardId
+                        && !boards.some((board) => board.id === boardId)
                         ? [{
-                            value: map.githubProjectNodeId,
-                            label: `Saved board (${map.githubProjectNodeId})`,
+                            value: boardId,
+                            label: `Saved board (${boardId})`,
                           }]
                         : []),
                     ]}
@@ -191,6 +347,9 @@ export function ProjectManageDialog({
                   <p className="mt-1 text-xs text-muted">
                     Two-way Status sync uses this Projects v2 board. Webhook deliveries need the
                     Projects v2 item event on the org or user that owns the board.
+                    {selectedCodebaseId !== project.provider_project_id
+                      ? " Save the project codebase first, then save mappings for the new repository."
+                      : null}
                   </p>
                 </div>
               ) : null}

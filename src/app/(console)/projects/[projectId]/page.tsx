@@ -182,6 +182,9 @@ async function ProjectContent({ params }: { params: Promise<{ projectId: string 
                   ownership_mode: project.ownership_mode,
                   product_id: project.product_id,
                   provider: project.provider,
+                  provider_project_id: project.provider_project_id,
+                  provider_project_name: project.provider_project_name,
+                  provider_project_url: project.provider_project_url,
                   integration_id: project.integration_id,
                   publish_outbound: Boolean(project.publish_outbound),
                 }}

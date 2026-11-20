@@ -62,6 +62,7 @@ import {
   shareIntegrationToWorkspace,
   testIntegration,
   updateFieldMappings,
+  updateProjectCodebase,
 } from "@/server/integrations/service";
 import { writeAudit } from "@/server/audit";
 import { withUser } from "@/server/db/client";
@@ -391,13 +392,26 @@ export async function createProjectAction(_state: ActionState, formData: FormDat
 
 export async function updateProjectAction(formData: FormData): Promise<void> {
   const returnTo = String(formData.get("returnTo") ?? "").trim();
+  const workspaceId = String(formData.get("workspaceId"));
   const projectId = String(formData.get("projectId"));
-  await updateProject(await userId(), String(formData.get("workspaceId")), projectId, {
+  const uid = await userId();
+  await updateProject(uid, workspaceId, projectId, {
     name: formData.has("name") ? String(formData.get("name") ?? "") : undefined,
     nickname: formData.has("nickname") ? String(formData.get("nickname") ?? "") : undefined,
     description: formData.has("description") ? String(formData.get("description") ?? "") : undefined,
     productId: formData.has("productId") ? String(formData.get("productId") ?? "") || null : undefined,
   });
+  if (formData.has("providerProjectId")) {
+    const providerProjectId = String(formData.get("providerProjectId") ?? "").trim();
+    if (providerProjectId) {
+      await updateProjectCodebase(uid, workspaceId, projectId, {
+        providerProjectId,
+        name: String(formData.get("providerProjectName") ?? "") || providerProjectId,
+        key: String(formData.get("providerProjectKey") ?? "") || null,
+        url: String(formData.get("providerProjectUrl") ?? "") || null,
+      });
+    }
+  }
   redirect(returnTo || `/projects/${projectId}`);
 }
 
