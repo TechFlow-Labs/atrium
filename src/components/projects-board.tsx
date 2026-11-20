@@ -68,6 +68,9 @@ type ProjectRow = {
   provider: string | null;
   provider_project_name: string | null;
   provider_project_url: string | null;
+  provider_project_id?: string | null;
+  github_project_node_id?: string | null;
+  github_project_title?: string | null;
 };
 
 type BusyProject = {

@@ -480,6 +480,15 @@ export function ProjectForm({
             <input type="hidden" name="key" value={selectedRemote?.key ?? ""} />
             <input type="hidden" name="url" value={selectedRemote?.url ?? ""} />
             <input type="hidden" name="githubProjectNodeId" value={isGithub ? selectedBoardId : ""} />
+            <input
+              type="hidden"
+              name="githubProjectTitle"
+              value={
+                isGithub
+                  ? (boards.find((board) => board.id === selectedBoardId)?.title ?? "")
+                  : ""
+              }
+            />
 
             {products.length > 1 ? (
               <div>

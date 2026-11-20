@@ -21,6 +21,8 @@ export type ProjectRecord = {
   provider_project_name: string | null;
   provider_project_url: string | null;
   provider_project_id: string | null;
+  github_project_node_id: string | null;
+  github_project_title: string | null;
   integration_id: string | null;
   publish_outbound: boolean | null;
 };
@@ -49,6 +51,8 @@ export async function listProjects(
              p.name, p.nickname, p.description, p.status, p.ownership_mode,
              p.archived_at, p.created_at,
              i.provider, c.provider_project_name, c.provider_project_url, c.provider_project_id,
+             nullif(c.field_mappings->>'githubProjectNodeId', '') as github_project_node_id,
+             nullif(c.field_mappings->>'githubProjectTitle', '') as github_project_title,
              c.integration_id, c.publish_outbound
       from projects p
       left join products prod on prod.id = p.product_id
@@ -260,6 +264,8 @@ export async function getProject(userId: string, workspaceId: string, projectId:
              p.name, p.nickname, p.description, p.status, p.ownership_mode,
              p.archived_at, p.created_at,
              i.provider, c.provider_project_name, c.provider_project_url, c.provider_project_id,
+             nullif(c.field_mappings->>'githubProjectNodeId', '') as github_project_node_id,
+             nullif(c.field_mappings->>'githubProjectTitle', '') as github_project_title,
              c.integration_id, c.publish_outbound
       from projects p
       left join products prod on prod.id = p.product_id

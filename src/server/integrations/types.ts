@@ -46,6 +46,8 @@ export type FieldMappings = {
    * When set (or auto-discovered for the repo), Atrium syncs Status two-way with that board.
    */
   githubProjectNodeId?: string;
+  /** Display title for the linked Projects v2 board, when known. */
+  githubProjectTitle?: string;
 };
 
 export type StoredCredential = {

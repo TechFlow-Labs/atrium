@@ -431,11 +431,13 @@ export async function createExternalProject(
     url?: string | null;
     productId?: string | null;
     githubProjectNodeId?: string | null;
+    githubProjectTitle?: string | null;
   },
 ): Promise<string> {
   return withUser(userId, async (tx) => {
     await requireAction(tx, workspaceId, "project.create");
     const boardId = input.githubProjectNodeId?.trim() || undefined;
+    const boardTitle = input.githubProjectTitle?.trim() || undefined;
     const existing = await findLinkedProjectId(tx, workspaceId, input.integrationId, input.providerProjectId);
     if (existing) {
       if (boardId) {
@@ -447,7 +449,11 @@ export async function createExternalProject(
         const prev = existingMaps[0]?.field_mappings ?? {};
         await tx.execute(sql`
           update project_connections
-          set field_mappings = ${JSON.stringify({ ...prev, githubProjectNodeId: boardId })}::jsonb
+          set field_mappings = ${JSON.stringify({
+            ...prev,
+            githubProjectNodeId: boardId,
+            ...(boardTitle ? { githubProjectTitle: boardTitle } : {}),
+          })}::jsonb
           where project_id = ${existing}::uuid and workspace_id = ${workspaceId}::uuid
         `);
       }
@@ -471,7 +477,12 @@ export async function createExternalProject(
     const adapter = getAdapter(integration.provider);
     const fieldMappings: FieldMappings = {
       ...adapter.defaultMappings(),
-      ...(boardId ? { githubProjectNodeId: boardId } : {}),
+      ...(boardId
+        ? {
+            githubProjectNodeId: boardId,
+            ...(boardTitle ? { githubProjectTitle: boardTitle } : {}),
+          }
+        : {}),
     };
     const rows = await tx.execute<{ id: string }>(sql`
       insert into projects (workspace_id, product_id, name, ownership_mode, created_by)
@@ -558,6 +569,13 @@ export async function updateFieldMappings(
         mappings.githubProjectNodeId !== undefined
           ? mappings.githubProjectNodeId.trim() || undefined
           : prev.githubProjectNodeId,
+      githubProjectTitle:
+        mappings.githubProjectTitle !== undefined
+          ? mappings.githubProjectTitle.trim() || undefined
+          : mappings.githubProjectNodeId !== undefined
+            && mappings.githubProjectNodeId.trim() !== (prev.githubProjectNodeId ?? "")
+            ? undefined
+            : prev.githubProjectTitle,
     };
     await tx.execute(sql`
       update project_connections

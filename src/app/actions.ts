@@ -53,6 +53,7 @@ import {
   disconnectIntegration,
   ensureExternalProjectForTask,
   listGithubBoardsForRepo,
+  listGithubProjectsForConnection,
   listIntegrationShareTargets,
   listRemoteProjects,
   resolveConflict,
@@ -880,6 +881,7 @@ export async function linkProjectAction(_state: ActionState, formData: FormData)
       url: String(formData.get("url") ?? "") || null,
       productId: String(formData.get("productId") ?? "") || null,
       githubProjectNodeId: String(formData.get("githubProjectNodeId") ?? "") || null,
+      githubProjectTitle: String(formData.get("githubProjectTitle") ?? "") || null,
     });
   } catch (error) {
     unstable_rethrow(error);
@@ -889,9 +891,20 @@ export async function linkProjectAction(_state: ActionState, formData: FormData)
 }
 
 export async function mappingAction(formData: FormData): Promise<void> {
+  const workspaceId = String(formData.get("workspaceId"));
+  const projectId = String(formData.get("projectId"));
   const githubProjectNodeId = formData.has("githubProjectNodeId")
     ? String(formData.get("githubProjectNodeId") ?? "").trim()
     : undefined;
+  let githubProjectTitle: string | undefined;
+  if (githubProjectNodeId !== undefined) {
+    if (githubProjectNodeId) {
+      const boards = await listGithubProjectsForConnection(await userId(), workspaceId, projectId);
+      githubProjectTitle = boards.find((board) => board.id === githubProjectNodeId)?.title ?? "";
+    } else {
+      githubProjectTitle = "";
+    }
+  }
   const mappings = {
     status: {
       open: String(formData.get("status_open") ?? ""),
@@ -907,10 +920,12 @@ export async function mappingAction(formData: FormData): Promise<void> {
       high: String(formData.get("priority_high") ?? ""),
       urgent: String(formData.get("priority_urgent") ?? ""),
     },
-    ...(githubProjectNodeId !== undefined ? { githubProjectNodeId } : {}),
+    ...(githubProjectNodeId !== undefined
+      ? { githubProjectNodeId, githubProjectTitle }
+      : {}),
   };
-  await updateFieldMappings(await userId(), String(formData.get("workspaceId")), String(formData.get("projectId")), mappings);
-  redirect(`/projects/${formData.get("projectId")}`);
+  await updateFieldMappings(await userId(), workspaceId, projectId, mappings);
+  redirect(`/projects/${projectId}`);
 }
 
 export async function publishAction(formData: FormData): Promise<void> {

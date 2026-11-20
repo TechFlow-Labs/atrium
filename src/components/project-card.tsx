@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Columns3, FolderGit2 } from "lucide-react";
 import { ProjectDeleteDialog } from "@/components/project-delete-dialog";
 import { ProjectNicknameDialog } from "@/components/project-nickname-dialog";
 import {
@@ -9,7 +10,7 @@ import {
   providerLabel,
 } from "@/components/provider-icon";
 import { Badge } from "@/components/ui/badge";
-import { projectDisplayName } from "@/lib/project-display";
+import { projectCodebaseLabel, projectDisplayName } from "@/lib/project-display";
 import { cn } from "@/lib/utils";
 
 type ProjectCardProject = {
@@ -21,6 +22,9 @@ type ProjectCardProject = {
   provider: string | null;
   provider_project_name: string | null;
   provider_project_url: string | null;
+  provider_project_id?: string | null;
+  github_project_node_id?: string | null;
+  github_project_title?: string | null;
 };
 
 export function ProjectCard({
@@ -33,12 +37,17 @@ export function ProjectCard({
   canWrite: boolean;
 }) {
   const title = projectDisplayName(project);
-  const showOriginal = Boolean(project.nickname?.trim()) && project.nickname?.trim() !== project.name;
+  const codebase = projectCodebaseLabel(project);
+  const showOriginal =
+    Boolean(project.nickname?.trim())
+    && project.nickname?.trim() !== project.name
+    && project.name !== codebase;
   const key = providerKey(project.provider);
   const accent = providerAccents[key] ?? providerAccents.native!;
-  const sourceLabel = project.provider
-    ? `${providerLabel(project.provider)}${project.provider_project_name ? ` · ${project.provider_project_name}` : ""}`
-    : "Native in Atrium";
+  const isGithub = project.provider === "github";
+  const boardTitle = project.github_project_title?.trim() || null;
+  const hasBoard = Boolean(project.github_project_node_id?.trim() || boardTitle);
+  const showSplitMeta = Boolean(project.provider && codebase);
 
   return (
     <li
@@ -85,22 +94,75 @@ export function ProjectCard({
         </div>
 
         <div className="flex flex-1 flex-col px-4 py-3">
-          <p className="line-clamp-3 text-sm text-muted">
+          <p className="line-clamp-2 text-sm text-muted">
             {project.description || "No description yet."}
           </p>
 
-          <div className="mt-auto flex flex-wrap items-center justify-between gap-2 pt-4">
-            <p className={cn("min-w-0 truncate text-xs font-medium", accent.ink)}>{sourceLabel}</p>
-            {project.provider && project.provider_project_url ? (
-              <span className="pointer-events-auto relative z-10">
-                <OpenInProviderButton
-                  provider={project.provider}
-                  href={project.provider_project_url}
-                  label={project.provider === "github" ? "Open repository" : undefined}
-                />
-              </span>
-            ) : null}
-          </div>
+          {showSplitMeta ? (
+            <div className="mt-auto space-y-2 border-t pt-3">
+              {isGithub ? (
+                <div className="flex min-w-0 items-start gap-2">
+                  <span
+                    className={cn(
+                      "mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-md",
+                      accent.wash,
+                      accent.ink,
+                    )}
+                  >
+                    <Columns3 className="size-3.5" aria-hidden="true" />
+                  </span>
+                  <div className="min-w-0">
+                    <p className="text-[0.65rem] font-medium uppercase tracking-[0.18em] text-muted">
+                      Project board
+                    </p>
+                    <p className={cn("truncate text-xs font-medium", accent.ink)}>
+                      {boardTitle
+                        || (hasBoard ? "Linked board" : "No board linked")}
+                    </p>
+                  </div>
+                </div>
+              ) : null}
+
+              <div className="flex min-w-0 items-center justify-between gap-2">
+                <div className="flex min-w-0 items-start gap-2">
+                  <span
+                    className={cn(
+                      "mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-md",
+                      accent.wash,
+                      accent.ink,
+                    )}
+                  >
+                    {isGithub ? (
+                      <FolderGit2 className="size-3.5" aria-hidden="true" />
+                    ) : (
+                      <ProviderIcon provider={project.provider} size="sm" />
+                    )}
+                  </span>
+                  <div className="min-w-0">
+                    <p className="text-[0.65rem] font-medium uppercase tracking-[0.18em] text-muted">
+                      {isGithub ? "Codebase" : providerLabel(project.provider)}
+                    </p>
+                    <p className={cn("truncate text-xs font-medium", accent.ink)}>{codebase}</p>
+                  </div>
+                </div>
+                {project.provider_project_url ? (
+                  <span className="pointer-events-auto relative z-10 shrink-0">
+                    <OpenInProviderButton
+                      provider={project.provider}
+                      href={project.provider_project_url}
+                      label={isGithub ? "Open repository" : undefined}
+                    />
+                  </span>
+                ) : null}
+              </div>
+            </div>
+          ) : (
+            <div className="mt-auto flex flex-wrap items-center justify-between gap-2 pt-4">
+              <p className={cn("min-w-0 truncate text-xs font-medium", accent.ink)}>
+                Native in Atrium
+              </p>
+            </div>
+          )}
         </div>
       </div>
     </li>
