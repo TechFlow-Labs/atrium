@@ -430,12 +430,29 @@ export async function createExternalProject(
     key?: string | null;
     url?: string | null;
     productId?: string | null;
+    githubProjectNodeId?: string | null;
   },
 ): Promise<string> {
   return withUser(userId, async (tx) => {
     await requireAction(tx, workspaceId, "project.create");
+    const boardId = input.githubProjectNodeId?.trim() || undefined;
     const existing = await findLinkedProjectId(tx, workspaceId, input.integrationId, input.providerProjectId);
-    if (existing) return existing;
+    if (existing) {
+      if (boardId) {
+        const existingMaps = await tx.execute<{ field_mappings: FieldMappings | null }>(sql`
+          select field_mappings
+          from project_connections
+          where project_id = ${existing}::uuid and workspace_id = ${workspaceId}::uuid
+        `);
+        const prev = existingMaps[0]?.field_mappings ?? {};
+        await tx.execute(sql`
+          update project_connections
+          set field_mappings = ${JSON.stringify({ ...prev, githubProjectNodeId: boardId })}::jsonb
+          where project_id = ${existing}::uuid and workspace_id = ${workspaceId}::uuid
+        `);
+      }
+      return existing;
+    }
     const integrations = await tx.execute<{ provider: IntegrationProviderId; status: string }>(sql`
       select provider, status from integrations
       where id = ${input.integrationId}::uuid and workspace_id = ${workspaceId}::uuid
@@ -452,6 +469,10 @@ export async function createExternalProject(
     const { resolveProductId } = await import("../products/service");
     const productId = await resolveProductId(tx, workspaceId, input.productId);
     const adapter = getAdapter(integration.provider);
+    const fieldMappings: FieldMappings = {
+      ...adapter.defaultMappings(),
+      ...(boardId ? { githubProjectNodeId: boardId } : {}),
+    };
     const rows = await tx.execute<{ id: string }>(sql`
       insert into projects (workspace_id, product_id, name, ownership_mode, created_by)
       values (
@@ -477,7 +498,7 @@ export async function createExternalProject(
         ${input.key ?? null},
         ${input.name.trim()},
         ${input.url ?? null},
-        ${JSON.stringify(adapter.defaultMappings())}::jsonb,
+        ${JSON.stringify(fieldMappings)}::jsonb,
         false,
         true
       )
@@ -549,6 +570,44 @@ export async function updateFieldMappings(
       entityType: "project",
       entityId: projectId,
     });
+  });
+}
+
+/** Lists GitHub Projects v2 boards linked to a repository for an integration (create/link flow). */
+export async function listGithubBoardsForRepo(
+  userId: string,
+  workspaceId: string,
+  integrationId: string,
+  providerProjectId: string,
+): Promise<Array<{ id: string; title: string; number: number; url: string }>> {
+  const { listRepositoryProjectsV2 } = await import("./github-projects");
+  return withUser(userId, async (tx) => {
+    await requireAction(tx, workspaceId, "task.write");
+    const rows = await tx.execute<{
+      provider: string;
+      credential_ciphertext: string | null;
+      status: string;
+      workspace_id: string;
+    }>(sql`
+      select provider, credential_ciphertext, status, workspace_id
+      from integrations
+      where id = ${integrationId}::uuid and workspace_id = ${workspaceId}::uuid
+    `);
+    const row = rows[0];
+    if (!row || row.provider !== "github" || !row.credential_ciphertext || row.status === "revoked") {
+      return [];
+    }
+    const credentials = await ensureFreshCredentials(tx, {
+      integrationId,
+      workspaceId: row.workspace_id,
+      provider: "github",
+      ciphertext: row.credential_ciphertext,
+    });
+    try {
+      return await listRepositoryProjectsV2(credentials.accessToken, providerProjectId);
+    } catch {
+      return [];
+    }
   });
 }
 

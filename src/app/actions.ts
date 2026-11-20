@@ -52,6 +52,7 @@ import {
   createExternalProject,
   disconnectIntegration,
   ensureExternalProjectForTask,
+  listGithubBoardsForRepo,
   listIntegrationShareTargets,
   listRemoteProjects,
   resolveConflict,
@@ -599,6 +600,25 @@ export async function listRemoteProjectsForCreateAction(
   }
 }
 
+export async function listGithubBoardsForCreateAction(
+  workspaceId: string,
+  integrationId: string,
+  providerProjectId: string,
+): Promise<{ boards: Array<{ id: string; title: string; number: number; url: string }> } | { error: string }> {
+  try {
+    const boards = await listGithubBoardsForRepo(
+      await userId(),
+      workspaceId,
+      integrationId,
+      providerProjectId,
+    );
+    return { boards };
+  } catch (error) {
+    unstable_rethrow(error);
+    return { error: error instanceof Error ? error.message : "Could not load GitHub Project boards" };
+  }
+}
+
 export async function updateTaskAction(formData: FormData): Promise<void> {
   await updateTask(await userId(), String(formData.get("workspaceId")), String(formData.get("taskId")), {
     version: Number(formData.get("version")),
@@ -859,6 +879,7 @@ export async function linkProjectAction(_state: ActionState, formData: FormData)
       key: String(formData.get("key") ?? "") || null,
       url: String(formData.get("url") ?? "") || null,
       productId: String(formData.get("productId") ?? "") || null,
+      githubProjectNodeId: String(formData.get("githubProjectNodeId") ?? "") || null,
     });
   } catch (error) {
     unstable_rethrow(error);
