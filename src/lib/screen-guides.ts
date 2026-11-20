@@ -198,7 +198,7 @@ export const GUIDES = {
   },
   project: {
     id: "project",
-    version: 2,
+    version: 3,
     title: "Project",
     intro: "A project page shows status, updates, and the task list.",
     tour: [
@@ -215,7 +215,7 @@ export const GUIDES = {
       {
         target: "project-manage",
         title: "Manage project",
-        body: "Admins can change the project name and nickname, and map provider fields for linked projects.",
+        body: "Open Manage in the header to edit settings, field mappings, and publishing.",
       },
     ],
   },

@@ -13,8 +13,9 @@ import {
 import { ScreenLoader } from "@/components/screen-loader";
 import { connection } from "next/server";
 import { notFound, redirect } from "next/navigation";
-import { archiveProjectAction, createMilestoneAction, createTaskAction, mappingAction, publishAction, updateProjectAction } from "@/app/actions";
+import { archiveProjectAction, createMilestoneAction, createTaskAction } from "@/app/actions";
 import { ProjectDeleteDialog } from "@/components/project-delete-dialog";
+import { ProjectManageDialog } from "@/components/project-manage-dialog";
 import { OpenInProviderButton, ProviderIcon } from "@/components/provider-icon";
 import {
   buildProjectDashboardStats,
@@ -26,7 +27,7 @@ import {
 import { TaskForm } from "@/components/task-form";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Input, Label, Textarea } from "@/components/ui/field";
+import { Input } from "@/components/ui/field";
 import { getSessionUser } from "@/server/auth/session";
 import { workspaceContext } from "@/server/auth/workspace";
 import {
@@ -40,7 +41,6 @@ import { sql } from "drizzle-orm";
 import { withUser } from "@/server/db/client";
 import { projectDisplayName } from "@/lib/project-display";
 import { formatWhen } from "@/lib/utils";
-import { MenuSelect } from "@/components/ui/menu-select";
 
 export const instant = false;
 
@@ -172,6 +172,23 @@ async function ProjectContent({ params }: { params: Promise<{ projectId: string 
           ) : null}
           {canAdmin ? (
             <>
+              <ProjectManageDialog
+                workspaceId={current.id}
+                project={{
+                  id: project.id,
+                  name: project.name,
+                  nickname: project.nickname,
+                  description: project.description,
+                  ownership_mode: project.ownership_mode,
+                  product_id: project.product_id,
+                  provider: project.provider,
+                  integration_id: project.integration_id,
+                  publish_outbound: Boolean(project.publish_outbound),
+                }}
+                products={products.map((product) => ({ id: product.id, name: product.name }))}
+                mappings={map}
+                githubBoards={githubBoards}
+              />
               <form action={archiveProjectAction}>
                 <input type="hidden" name="workspaceId" value={current.id} />
                 <input type="hidden" name="projectId" value={project.id} />
@@ -369,153 +386,6 @@ async function ProjectContent({ params }: { params: Promise<{ projectId: string 
         </section>
       ) : null}
 
-      {(canAdmin || map) ? (
-        <details
-          data-tour="project-manage"
-          className="group rounded-lg border bg-card"
-          open={project.provider === "github"}
-        >
-          <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-medium marker:content-none [&::-webkit-details-marker]:hidden">
-            <span>
-              Manage project
-              <span className="ml-2 text-xs font-normal text-muted">Settings, mappings, and publishing</span>
-            </span>
-            <span className="shrink-0 text-xs font-normal text-muted group-open:hidden">Show</span>
-            <span className="hidden shrink-0 text-xs font-normal text-muted group-open:inline">Hide</span>
-          </summary>
-          <div className="space-y-6 border-t px-4 py-4">
-            {canAdmin ? (
-              <form action={updateProjectAction} className="grid gap-3 md:grid-cols-2">
-                <input type="hidden" name="workspaceId" value={current.id} />
-                <input type="hidden" name="projectId" value={project.id} />
-                <div>
-                  <Label htmlFor="nickname">Nickname</Label>
-                  <Input
-                    id="nickname"
-                    name="nickname"
-                    defaultValue={project.nickname ?? ""}
-                    placeholder="Friendly name in Atrium"
-                    className="mt-1"
-                    maxLength={80}
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="name">Name</Label>
-                  <Input
-                    id="name"
-                    name="name"
-                    defaultValue={project.name}
-                    className="mt-1"
-                    readOnly={project.ownership_mode === "external"}
-                  />
-                  {project.ownership_mode === "external" ? (
-                    <p className="mt-1 text-xs text-muted">
-                      Provider name stays as the source of truth. Use nickname for a shorter label.
-                    </p>
-                  ) : null}
-                </div>
-                <div className="md:col-span-2">
-                  <Label htmlFor="description">Description</Label>
-                  <Textarea id="description" name="description" defaultValue={project.description} className="mt-1" />
-                </div>
-                {products.length > 0 ? (
-                  <div className="md:col-span-2">
-                    <Label htmlFor="productId">Product</Label>
-                    <MenuSelect
-                      id="productId"
-                      name="productId"
-                      defaultValue={project.product_id}
-                      className="mt-1"
-                      aria-label="Product"
-                      required
-                      options={products.map((product) => ({
-                        value: product.id,
-                        label: product.name,
-                      }))}
-                    />
-                  </div>
-                ) : null}
-                <Button type="submit">Save project</Button>
-              </form>
-            ) : null}
-            {project.ownership_mode === "native" && project.integration_id && canAdmin ? (
-              <form action={publishAction} className="rounded-md border bg-background p-4 text-sm">
-                <input type="hidden" name="workspaceId" value={current.id} />
-                <input type="hidden" name="projectId" value={project.id} />
-                <input type="hidden" name="enabled" value={project.publish_outbound ? "false" : "true"} />
-                <p>
-                  Outbound publishing is {project.publish_outbound ? "on" : "off"}. Native fields stay authoritative
-                  here. Turning publishing on sends changes to the provider as an explicit sync.
-                </p>
-                <Button className="mt-3" variant="outline" type="submit">
-                  {project.publish_outbound ? "Stop publishing" : "Publish to provider"}
-                </Button>
-              </form>
-            ) : null}
-            {map && canAdmin ? (
-              <form action={mappingAction}>
-                <h3 className="text-lg font-medium">Field mappings</h3>
-                <p className="mt-1 text-sm text-muted">
-                  Map Atrium statuses and priorities onto provider values. Linear status changes need a state id, not a
-                  display name. For GitHub, map statuses to Project Status option names (for example Todo, In Progress,
-                  Done) when a board is linked below.
-                </p>
-                <input type="hidden" name="workspaceId" value={current.id} />
-                <input type="hidden" name="projectId" value={project.id} />
-                {project.provider === "github" ? (
-                  <div className="mt-3">
-                    <Label htmlFor="githubProjectNodeId">GitHub Project board</Label>
-                    <MenuSelect
-                      id="githubProjectNodeId"
-                      name="githubProjectNodeId"
-                      className="mt-1"
-                      aria-label="GitHub Project board"
-                      defaultValue={map.githubProjectNodeId ?? ""}
-                      options={[
-                        {
-                          value: "",
-                          label: githubBoards.length
-                            ? "Auto (first board linked to the repository)"
-                            : "No boards found — reconnect GitHub with project scopes",
-                        },
-                        ...githubBoards.map((board) => ({
-                          value: board.id,
-                          label: `${board.title} (#${board.number})`,
-                        })),
-                        ...(map.githubProjectNodeId
-                          && !githubBoards.some((board) => board.id === map.githubProjectNodeId)
-                          ? [{ value: map.githubProjectNodeId, label: `Saved board (${map.githubProjectNodeId})` }]
-                          : []),
-                      ]}
-                    />
-                    <p className="mt-1 text-xs text-muted">
-                      Two-way Status sync uses this Projects v2 board. Webhook deliveries need the Projects v2 item
-                      event on the org or user that owns the board.
-                    </p>
-                  </div>
-                ) : null}
-                <div className="mt-3 grid gap-2 md:grid-cols-2">
-                  {(["open", "in_progress", "blocked", "done", "cancelled"] as const).map((status) => (
-                    <label key={status} className="text-sm">
-                      {status}
-                      <Input name={`status_${status}`} defaultValue={map.status?.[status] ?? ""} className="mt-1" />
-                    </label>
-                  ))}
-                  {(["none", "low", "medium", "high", "urgent"] as const).map((priority) => (
-                    <label key={priority} className="text-sm">
-                      {priority}
-                      <Input name={`priority_${priority}`} defaultValue={map.priority?.[priority] ?? ""} className="mt-1" />
-                    </label>
-                  ))}
-                </div>
-                <Button className="mt-3" type="submit">
-                  Save mappings
-                </Button>
-              </form>
-            ) : null}
-          </div>
-        </details>
-      ) : null}
     </div>
   );
 }
