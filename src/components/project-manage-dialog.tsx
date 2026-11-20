@@ -1,13 +1,14 @@
 "use client";
 
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useActionState, useEffect, useMemo, useState, useTransition } from "react";
 import { Settings2 } from "lucide-react";
 import {
   listGithubBoardsForCreateAction,
   listRemoteProjectsForCreateAction,
   mappingAction,
   publishAction,
-  updateProjectAction,
+  updateProjectSettingsAction,
+  type ActionState,
 } from "@/app/actions";
 import { Button } from "@/components/ui/button";
 import {
@@ -68,6 +69,10 @@ export function ProjectManageDialog({
   githubBoards: GithubBoard[];
 }) {
   const [open, setOpen] = useState(false);
+  const [saveState, saveAction, savePending] = useActionState<ActionState, FormData>(
+    updateProjectSettingsAction,
+    {},
+  );
   const map = mappings ?? null;
   const isGithub = project.provider === "github";
   const canEditCodebase = Boolean(project.integration_id && project.provider_project_id);
@@ -170,7 +175,7 @@ export function ProjectManageDialog({
         </DialogHeader>
 
         <div className="space-y-6">
-          <form action={updateProjectAction} className="grid gap-3 md:grid-cols-2">
+          <form action={saveAction} className="grid gap-3 md:grid-cols-2">
             <input type="hidden" name="workspaceId" value={workspaceId} />
             <input type="hidden" name="projectId" value={project.id} />
             {canEditCodebase ? (
@@ -191,6 +196,11 @@ export function ProjectManageDialog({
                   value={selectedRemote?.url || project.provider_project_url || ""}
                 />
               </>
+            ) : null}
+            {saveState.error ? (
+              <p className="md:col-span-2 text-sm text-destructive" role="alert">
+                {saveState.error}
+              </p>
             ) : null}
             <div>
               <Label htmlFor="manage-nickname">Nickname</Label>
@@ -230,12 +240,12 @@ export function ProjectManageDialog({
                   aria-label={isGithub ? "Codebase" : "Provider project"}
                   value={selectedCodebaseId}
                   onValueChange={onCodebaseChange}
-                  disabled={loadingRemotes || codebaseOptions.length === 0}
+                  disabled={codebaseOptions.length === 0}
                   required
                   options={codebaseOptions}
                   placeholder={
                     loadingRemotes
-                      ? "Loading…"
+                      ? "Loading repositories…"
                       : isGithub
                         ? "Select a repository"
                         : "Select a project"
@@ -278,7 +288,9 @@ export function ProjectManageDialog({
                 />
               </div>
             ) : null}
-            <Button type="submit">Save project</Button>
+            <Button type="submit" disabled={savePending}>
+              {savePending ? "Saving…" : "Save project"}
+            </Button>
           </form>
 
           {project.ownership_mode === "native" && project.integration_id ? (

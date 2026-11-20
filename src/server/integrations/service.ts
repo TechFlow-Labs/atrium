@@ -567,16 +567,31 @@ export async function updateProjectCodebase(
       integration_id: string;
       provider_project_id: string;
       provider_project_name: string;
+      provider_project_url: string | null;
+      provider_project_key: string | null;
       field_mappings: FieldMappings | null;
     }>(sql`
-      select id, integration_id, provider_project_id, provider_project_name, field_mappings
+      select id, integration_id, provider_project_id, provider_project_name,
+             provider_project_url, provider_project_key, field_mappings
       from project_connections
       where project_id = ${projectId}::uuid and workspace_id = ${workspaceId}::uuid
     `);
     const connection = rows[0];
     if (!connection) throw new Error("Project connection not found");
 
-    if (nextId !== connection.provider_project_id) {
+    const repoChanged = nextId !== connection.provider_project_id;
+    const nextKey = input.key ?? null;
+    const nextUrl = input.url ?? null;
+    if (
+      !repoChanged
+      && name === connection.provider_project_name
+      && nextKey === connection.provider_project_key
+      && nextUrl === connection.provider_project_url
+    ) {
+      return;
+    }
+
+    if (repoChanged) {
       const conflict = await findLinkedProjectId(tx, workspaceId, connection.integration_id, nextId);
       if (conflict && conflict !== projectId) {
         throw new Error("That codebase is already linked to another project");
@@ -584,23 +599,32 @@ export async function updateProjectCodebase(
     }
 
     const prev = connection.field_mappings ?? {};
-    const repoChanged = nextId !== connection.provider_project_id;
     const nextMappings: FieldMappings = { ...prev };
     if (repoChanged) {
       delete nextMappings.githubProjectNodeId;
       delete nextMappings.githubProjectTitle;
     }
 
-    await tx.execute(sql`
-      update project_connections
-      set provider_project_id = ${nextId},
-          provider_project_key = ${input.key ?? null},
-          provider_project_name = ${name},
-          provider_project_url = ${input.url ?? null},
-          field_mappings = ${JSON.stringify(nextMappings)}::jsonb,
-          updated_at = now()
-      where id = ${connection.id}::uuid
-    `);
+    try {
+      await tx.execute(sql`
+        update project_connections
+        set provider_project_id = ${nextId},
+            provider_project_key = ${nextKey},
+            provider_project_name = ${name},
+            provider_project_url = ${nextUrl},
+            field_mappings = ${JSON.stringify(nextMappings)}::jsonb,
+            updated_at = now()
+        where id = ${connection.id}::uuid
+      `);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (/unique|duplicate/i.test(message)) {
+        throw new Error("That codebase is already linked to another project");
+      }
+      throw error;
+    }
+
+    if (!repoChanged) return;
 
     await tx.execute(sql`
       update projects
@@ -614,9 +638,11 @@ export async function updateProjectCodebase(
       where id = ${projectId}::uuid and workspace_id = ${workspaceId}::uuid
     `);
 
-    if (repoChanged) {
-      await tx.execute(sql`select enqueue_initial_reconcile(${connection.id}::uuid)`);
-    }
+    const suffix = `codebase:${nextId}`.slice(0, 120);
+    await tx.execute(sql`
+      select enqueue_connection_reconcile(${connection.id}::uuid, ${suffix})
+    `);
+
     await writeAudit(tx, {
       workspaceId,
       action: "project.codebase_updated",
