@@ -11,18 +11,13 @@ import {
   ListTodo,
   Siren,
 } from "lucide-react";
-import {
-  archiveProductAction,
-  createProjectAction,
-  deleteProductAction,
-  updateProductAction,
-} from "@/app/actions";
+import { createProjectAction } from "@/app/actions";
+import { ProductEditDialog } from "@/components/product-edit-dialog";
 import { ProjectCard } from "@/components/project-card";
 import { ProjectStatCard } from "@/components/project-dashboard";
 import { ProjectForm } from "@/components/project-form";
 import { ScreenLoader } from "@/components/screen-loader";
 import { Button } from "@/components/ui/button";
-import { Input, Label, Textarea } from "@/components/ui/field";
 import { getSessionUser } from "@/server/auth/session";
 import { workspaceContext } from "@/server/auth/workspace";
 import { listIntegrations } from "@/server/integrations/service";
@@ -106,6 +101,18 @@ async function ProductDetailContent({
             <Button asChild variant="outline">
               <Link href={`/tasks?product=${encodeURIComponent(product.id)}`}>View issues</Link>
             </Button>
+            {canWrite ? (
+              <ProductEditDialog
+                workspaceId={current.id}
+                product={{
+                  id: product.id,
+                  name: product.name,
+                  description: product.description,
+                  status: product.status,
+                }}
+                canDelete={canDelete}
+              />
+            ) : null}
             {canWrite && product.status === "active" ? (
               <ProjectForm
                 workspaceId={current.id}
@@ -184,66 +191,6 @@ async function ProductDetailContent({
         </ul>
       )}
 
-      {canWrite ? (
-        <section className="max-w-xl space-y-6 rounded-xl border bg-card p-5">
-          <h2 className="text-lg font-medium">Product settings</h2>
-          <form action={updateProductAction} className="grid gap-3">
-            <input type="hidden" name="workspaceId" value={current.id} />
-            <input type="hidden" name="productId" value={product.id} />
-            <div>
-              <Label htmlFor="edit-product-name">Name</Label>
-              <Input
-                id="edit-product-name"
-                name="name"
-                defaultValue={product.name}
-                required
-                className="mt-1"
-              />
-            </div>
-            <div>
-              <Label htmlFor="edit-product-description">Description</Label>
-              <Textarea
-                id="edit-product-description"
-                name="description"
-                defaultValue={product.description}
-                className="mt-1"
-                rows={3}
-              />
-            </div>
-            <Button type="submit" variant="secondary">
-              Save changes
-            </Button>
-          </form>
-
-          <div className="flex flex-wrap gap-2 border-t pt-4">
-            <form action={archiveProductAction}>
-              <input type="hidden" name="workspaceId" value={current.id} />
-              <input type="hidden" name="productId" value={product.id} />
-              <input
-                type="hidden"
-                name="archived"
-                value={product.status === "archived" ? "false" : "true"}
-              />
-              <Button type="submit" variant="secondary">
-                {product.status === "archived" ? "Restore product" : "Archive product"}
-              </Button>
-            </form>
-            {canDelete ? (
-              <form action={deleteProductAction}>
-                <input type="hidden" name="workspaceId" value={current.id} />
-                <input type="hidden" name="productId" value={product.id} />
-                <Button type="submit" variant="destructive">
-                  Delete product
-                </Button>
-              </form>
-            ) : (
-              <p className="text-xs text-muted">
-                Delete projects first to remove this product.
-              </p>
-            )}
-          </div>
-        </section>
-      ) : null}
     </div>
   );
 }
