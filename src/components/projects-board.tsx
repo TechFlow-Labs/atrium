@@ -71,6 +71,7 @@ type ProjectRow = {
   provider_project_id?: string | null;
   github_project_node_id?: string | null;
   github_project_title?: string | null;
+  github_project_url?: string | null;
   github_board_disabled?: boolean;
 };
 

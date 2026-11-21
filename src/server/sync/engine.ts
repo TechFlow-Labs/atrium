@@ -1,6 +1,6 @@
 import { sql } from "drizzle-orm";
 import { getAdapter } from "../integrations/registry";
-import { ensureFreshCredentials } from "../integrations/token-refresh";
+import { ensureFreshCredentials, runWithCredentialRetry } from "../integrations/token-refresh";
 import { ProviderError, type FieldMappings, type ProviderId, type RemoteTask } from "../integrations/types";
 import { logError } from "../log";
 import { withWorker, type Tx } from "../db/client";
@@ -375,31 +375,39 @@ export async function processOutboxRow(row: ClaimedOutbox): Promise<void> {
         ciphertext: integration.credential_ciphertext,
       });
       const adapter = getAdapter(integration.provider);
-      const ctx = {
-        tx,
+      const mappings = integration.field_mappings ?? adapter.defaultMappings();
+      const credentialInput = {
         integrationId: integration.id,
-        credentials,
-        mappings: integration.field_mappings ?? adapter.defaultMappings(),
+        workspaceId: integration.workspace_id,
+        provider: integration.provider,
+        ciphertext: integration.credential_ciphertext,
       };
-      let result: RemoteTask;
-      if (payload.kind === "archive") {
-        if (!adapter.archiveTask || !payload.providerTaskId) {
-          throw new ProviderError("This provider cannot archive tasks", "unsupported", false);
+      const { result } = await runWithCredentialRetry(tx, credentialInput, credentials, async (creds) => {
+        const ctx = {
+          tx,
+          integrationId: integration.id,
+          credentials: creds,
+          mappings,
+        };
+        if (payload.kind === "archive") {
+          if (!adapter.archiveTask || !payload.providerTaskId) {
+            throw new ProviderError("This provider cannot archive tasks", "unsupported", false);
+          }
+          return adapter.archiveTask(ctx, payload.providerTaskId, payload.providerProjectId);
         }
-        result = await adapter.archiveTask(ctx, payload.providerTaskId, payload.providerProjectId);
-      } else if (payload.kind === "update" && payload.providerTaskId) {
-        result = await adapter.updateTask(ctx, payload.providerTaskId, {
+        if (payload.kind === "update" && payload.providerTaskId) {
+          return adapter.updateTask(ctx, payload.providerTaskId, {
+            ...payload.fields,
+            providerProjectId: payload.providerProjectId,
+            operationId: row.operation_id,
+          });
+        }
+        return adapter.createTask(ctx, {
           ...payload.fields,
           providerProjectId: payload.providerProjectId,
           operationId: row.operation_id,
         });
-      } else {
-        result = await adapter.createTask(ctx, {
-          ...payload.fields,
-          providerProjectId: payload.providerProjectId,
-          operationId: row.operation_id,
-        });
-      }
+      });
       await writeProjection(tx, payload.taskId, result, integration.provider);
       await rememberFingerprint(tx, {
         workspaceId: row.workspace_id,
@@ -458,15 +466,14 @@ export async function reconcileConnection(connectionId: string): Promise<void> {
     return rows[0] ?? null;
   });
   if (!meta || meta.status !== "connected" || !meta.credential_ciphertext) return;
-  const credentials = await withWorker(async (tx) =>
+  let credentials = await withWorker(async (tx) =>
     ensureFreshCredentials(tx, {
       integrationId: meta.integration_id,
       workspaceId: meta.workspace_id,
       provider: meta.provider,
       ciphertext: meta.credential_ciphertext,
     }),
-  ).catch(() => null);
-  if (!credentials) return;
+  );
   const adapter = getAdapter(meta.provider);
   const startedAtNull = !meta.cursor;
   const seen: string[] = [];
@@ -474,12 +481,30 @@ export async function reconcileConnection(connectionId: string): Promise<void> {
   let guard = 0;
   try {
     do {
-      const page = await withWorker(async (tx) =>
-        adapter.listTasks(
-          { tx, integrationId: meta.integration_id, credentials, mappings: meta.field_mappings ?? adapter.defaultMappings() },
-          { providerProjectId: meta.provider_project_id, cursor },
-        ),
-      );
+      const page = await withWorker(async (tx) => {
+        const attempted = await runWithCredentialRetry(
+          tx,
+          {
+            integrationId: meta.integration_id,
+            workspaceId: meta.workspace_id,
+            provider: meta.provider,
+            ciphertext: meta.credential_ciphertext,
+          },
+          credentials,
+          (creds) =>
+            adapter.listTasks(
+              {
+                tx,
+                integrationId: meta.integration_id,
+                credentials: creds,
+                mappings: meta.field_mappings ?? adapter.defaultMappings(),
+              },
+              { providerProjectId: meta.provider_project_id, cursor },
+            ),
+        );
+        credentials = attempted.credentials;
+        return attempted.result;
+      });
       for (const remote of page.items) {
         seen.push(remote.providerId);
         await applyInboundTask({
@@ -612,30 +637,40 @@ export async function processWebhookDelivery(deliveryId: string): Promise<void> 
     return rows[0] ?? null;
   });
   if (!integration?.credential_ciphertext) throw new ProviderError("Integration is disconnected", "unauthorized", false);
-  const credentials = await withWorker(async (tx) =>
-    ensureFreshCredentials(tx, {
-      integrationId: delivery.integration_id!,
-      workspaceId: integration.workspace_id,
-      provider: integration.provider,
-      ciphertext: integration.credential_ciphertext,
-    }),
-  );
   const adapter = getAdapter(delivery.provider);
   const stored = delivery.payload as { body?: unknown; event?: string | null };
   const rawBody = JSON.stringify(stored?.body ?? delivery.payload);
   const headers: Record<string, string> = {};
   if (stored?.event) headers["x-github-event"] = stored.event;
-  const parsed = await withWorker(async (tx) =>
-    adapter.parseWebhook(
+  const parsed = await withWorker(async (tx) => {
+    const credentials = await ensureFreshCredentials(tx, {
+      integrationId: delivery.integration_id!,
+      workspaceId: integration.workspace_id,
+      provider: integration.provider,
+      ciphertext: integration.credential_ciphertext,
+    });
+    const attempted = await runWithCredentialRetry(
+      tx,
       {
-        tx,
         integrationId: delivery.integration_id!,
-        credentials,
-        mappings: integration.field_mappings ?? adapter.defaultMappings(),
+        workspaceId: integration.workspace_id,
+        provider: integration.provider,
+        ciphertext: integration.credential_ciphertext,
       },
-      { rawBody, headers },
-    ),
-  );
+      credentials,
+      (creds) =>
+        adapter.parseWebhook(
+          {
+            tx,
+            integrationId: delivery.integration_id!,
+            credentials: creds,
+            mappings: integration.field_mappings ?? adapter.defaultMappings(),
+          },
+          { rawBody, headers },
+        ),
+    );
+    return attempted.result;
+  });
   for (const event of parsed.events) {
     if (event.kind === "task.delete") {
       await tombstoneTask(delivery.integration_id, delivery.workspace_id, event.providerId);

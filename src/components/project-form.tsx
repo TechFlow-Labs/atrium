@@ -489,6 +489,15 @@ export function ProjectForm({
                   : ""
               }
             />
+            <input
+              type="hidden"
+              name="githubProjectUrl"
+              value={
+                isGithub
+                  ? (boards.find((board) => board.id === selectedBoardId)?.url ?? "")
+                  : ""
+              }
+            />
 
             {products.length > 1 ? (
               <div>

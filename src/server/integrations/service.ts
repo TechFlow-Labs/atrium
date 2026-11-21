@@ -432,12 +432,14 @@ export async function createExternalProject(
     productId?: string | null;
     githubProjectNodeId?: string | null;
     githubProjectTitle?: string | null;
+    githubProjectUrl?: string | null;
   },
 ): Promise<string> {
   return withUser(userId, async (tx) => {
     await requireAction(tx, workspaceId, "project.create");
     const boardId = input.githubProjectNodeId?.trim() || undefined;
     const boardTitle = input.githubProjectTitle?.trim() || undefined;
+    const boardUrl = input.githubProjectUrl?.trim() || undefined;
     const existing = await findLinkedProjectId(tx, workspaceId, input.integrationId, input.providerProjectId);
     if (existing) {
       if (boardId) {
@@ -453,6 +455,7 @@ export async function createExternalProject(
             ...prev,
             githubProjectNodeId: boardId,
             ...(boardTitle ? { githubProjectTitle: boardTitle } : {}),
+            ...(boardUrl ? { githubProjectUrl: boardUrl } : {}),
           })}::jsonb
           where project_id = ${existing}::uuid and workspace_id = ${workspaceId}::uuid
         `);
@@ -481,6 +484,7 @@ export async function createExternalProject(
         ? {
             githubProjectNodeId: boardId,
             ...(boardTitle ? { githubProjectTitle: boardTitle } : {}),
+            ...(boardUrl ? { githubProjectUrl: boardUrl } : {}),
           }
         : {}),
     };
@@ -603,6 +607,7 @@ export async function updateProjectCodebase(
     if (repoChanged) {
       delete nextMappings.githubProjectNodeId;
       delete nextMappings.githubProjectTitle;
+      delete nextMappings.githubProjectUrl;
     }
 
     try {
@@ -688,6 +693,13 @@ export async function updateFieldMappings(
             && mappings.githubProjectNodeId.trim() !== (prev.githubProjectNodeId ?? "")
             ? undefined
             : prev.githubProjectTitle,
+      githubProjectUrl:
+        mappings.githubProjectUrl !== undefined
+          ? mappings.githubProjectUrl.trim() || undefined
+          : mappings.githubProjectNodeId !== undefined
+            && mappings.githubProjectNodeId.trim() !== (prev.githubProjectNodeId ?? "")
+            ? undefined
+            : prev.githubProjectUrl,
     };
     await tx.execute(sql`
       update project_connections
@@ -1178,6 +1190,43 @@ export async function syncHealth(userId: string, workspaceId: string) {
       order by i.display_name
     `);
   });
+}
+
+/** Pull inbound updates for every connected project in the workspace. */
+export async function syncWorkspaceNow(
+  userId: string,
+  workspaceId: string,
+): Promise<{ synced: number }> {
+  const { reconcileConnection } = await import("../sync/engine");
+  const connections = await withUser(userId, async (tx) => {
+    await requireAction(tx, workspaceId, "task.read");
+    return tx.execute<{ id: string }>(sql`
+      select c.id
+      from project_connections c
+      join integrations i on i.id = c.integration_id
+      where c.workspace_id = ${workspaceId}::uuid
+        and c.sync_inbound = true
+        and i.status = 'connected'
+        and i.credential_ciphertext is not null
+      order by c.created_at
+    `);
+  });
+  if (connections.length === 0) {
+    return { synced: 0 };
+  }
+  const errors: string[] = [];
+  for (const connection of connections) {
+    try {
+      await reconcileConnection(connection.id);
+    } catch (error) {
+      errors.push(error instanceof Error ? error.message : "Sync failed");
+    }
+  }
+  if (errors.length > 0) {
+    const first = errors[0] ?? "Sync failed";
+    throw new Error(errors.length === 1 ? first : `${errors.length} connections failed · ${first}`);
+  }
+  return { synced: connections.length };
 }
 
 export async function listSyncProblems(userId: string, workspaceId: string) {

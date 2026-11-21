@@ -244,3 +244,33 @@ export async function ensureFreshCredentials(
 export function isUnauthorizedProviderError(error: unknown): boolean {
   return error instanceof ProviderError && error.code === "unauthorized";
 }
+
+export function canForceRefreshCredentials(credential: StoredCredential): boolean {
+  return Boolean(credential.githubInstallationId || credential.refreshToken);
+}
+
+/**
+ * Run a provider call; on unauthorized, mint/refresh credentials once and retry.
+ * Covers GitHub App tokens that expire slightly earlier than our skew window.
+ */
+export async function runWithCredentialRetry<T>(
+  tx: Tx,
+  input: {
+    integrationId: string;
+    workspaceId: string;
+    provider: ProviderId;
+    ciphertext: string | null;
+  },
+  credentials: StoredCredential,
+  run: (creds: StoredCredential) => Promise<T>,
+): Promise<{ result: T; credentials: StoredCredential }> {
+  try {
+    return { result: await run(credentials), credentials };
+  } catch (error) {
+    if (!isUnauthorizedProviderError(error) || !canForceRefreshCredentials(credentials)) {
+      throw error;
+    }
+    const refreshed = await ensureFreshCredentials(tx, input, true);
+    return { result: await run(refreshed), credentials: refreshed };
+  }
+}

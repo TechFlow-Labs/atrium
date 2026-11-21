@@ -60,6 +60,7 @@ import {
   retryDead,
   setNativePublishing,
   shareIntegrationToWorkspace,
+  syncWorkspaceNow,
   testIntegration,
   updateFieldMappings,
   updateProjectCodebase,
@@ -977,6 +978,7 @@ export async function linkProjectAction(_state: ActionState, formData: FormData)
       productId,
       githubProjectNodeId: String(formData.get("githubProjectNodeId") ?? "") || null,
       githubProjectTitle: String(formData.get("githubProjectTitle") ?? "") || null,
+      githubProjectUrl: String(formData.get("githubProjectUrl") ?? "") || null,
     });
   } catch (error) {
     unstable_rethrow(error);
@@ -996,12 +998,16 @@ export async function mappingAction(formData: FormData): Promise<void> {
     ? String(formData.get("githubProjectNodeId") ?? "").trim()
     : undefined;
   let githubProjectTitle: string | undefined;
+  let githubProjectUrl: string | undefined;
   if (githubProjectNodeId !== undefined) {
     if (githubProjectNodeId && githubProjectNodeId !== "none") {
       const boards = await listGithubProjectsForConnection(await userId(), workspaceId, projectId);
-      githubProjectTitle = boards.find((board) => board.id === githubProjectNodeId)?.title ?? "";
+      const match = boards.find((board) => board.id === githubProjectNodeId);
+      githubProjectTitle = match?.title ?? "";
+      githubProjectUrl = match?.url ?? "";
     } else {
       githubProjectTitle = "";
+      githubProjectUrl = "";
     }
   }
   const mappings = {
@@ -1020,7 +1026,7 @@ export async function mappingAction(formData: FormData): Promise<void> {
       urgent: String(formData.get("priority_urgent") ?? ""),
     },
     ...(githubProjectNodeId !== undefined
-      ? { githubProjectNodeId, githubProjectTitle }
+      ? { githubProjectNodeId, githubProjectTitle, githubProjectUrl }
       : {}),
   };
   await updateFieldMappings(await userId(), workspaceId, projectId, mappings);
@@ -1059,6 +1065,25 @@ export async function resolveAction(formData: FormData): Promise<void> {
   const resolution = formData.get("resolution") === "keep_remote" ? "keep_remote" : "keep_local";
   await resolveConflict(await userId(), String(formData.get("workspaceId")), String(formData.get("conflictId")), resolution);
   redirect("/sync");
+}
+
+export async function syncNowAction(workspaceId: string): Promise<ActionState> {
+  try {
+    const result = await syncWorkspaceNow(await userId(), workspaceId);
+    revalidateConsoleData(["/sync", "/tasks", "/projects", "/home"]);
+    if (result.synced === 0) {
+      return { notice: "Nothing to sync — connect a project first." };
+    }
+    return {
+      notice:
+        result.synced === 1
+          ? "Sync completed successfully."
+          : `Sync completed successfully · ${result.synced} connections.`,
+    };
+  } catch (error) {
+    unstable_rethrow(error);
+    return { error: error instanceof Error ? error.message : "Sync failed" };
+  }
 }
 
 export async function settingsAction(formData: FormData): Promise<void> {

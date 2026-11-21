@@ -1,14 +1,16 @@
 import Link from "next/link";
 import { Suspense } from "react";
-import { RefreshCw, Search } from "lucide-react";
+import { Search } from "lucide-react";
 import { AccountMenu } from "@/components/account-menu";
 import { AtriumLogo } from "@/components/atrium-logo";
 import { AppSidebar } from "@/components/app-sidebar";
+import { AppToaster } from "@/components/app-toaster";
 import { CreateMenu } from "@/components/create-menu";
 import { DevMenu } from "@/components/dev-menu";
 import { PageMotion } from "@/components/page-motion";
 import { QuickActions } from "@/components/quick-actions";
 import { ScreenGuide } from "@/components/screen-guide";
+import { SyncButton } from "@/components/sync-button";
 import { WorkspaceSwitch } from "@/components/workspace-switch";
 import type { WorkspaceContextDef } from "@/lib/workspace-contexts";
 import type { WorkspaceSummary } from "@/server/workspaces/service";
@@ -72,7 +74,7 @@ export function Shell({
             <div className="flex items-center" data-tour="create">
               <CreateMenu />
             </div>
-            <HeaderAction href="/sync" label="Sync" icon={RefreshCw} className="hidden sm:inline-flex" />
+            <SyncButton workspaceId={current.id} className="hidden sm:inline-flex" />
             {devTools ? <DevMenu mocksVisible={devTools.mocksVisible} envLabel={devTools.envLabel} /> : null}
             <AccountMenu user={user} theme={theme} />
           </div>
@@ -97,29 +99,7 @@ export function Shell({
         </main>
       </div>
       <QuickActions />
+      <AppToaster />
     </div>
-  );
-}
-
-function HeaderAction({
-  href,
-  label,
-  icon: Icon,
-  className = "inline-flex",
-}: {
-  href: string;
-  label: string;
-  icon: typeof Search;
-  className?: string;
-}) {
-  return (
-    <Link
-      href={href}
-      title={label}
-      aria-label={label}
-      className={`${className} size-9 items-center justify-center rounded-md border bg-card text-foreground transition hover:bg-accent`}
-    >
-      <Icon className="size-4" aria-hidden="true" />
-    </Link>
   );
 }

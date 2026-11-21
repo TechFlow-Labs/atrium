@@ -23,6 +23,7 @@ export type ProjectRecord = {
   provider_project_id: string | null;
   github_project_node_id: string | null;
   github_project_title: string | null;
+  github_project_url: string | null;
   /** True when Manage set GitHub board to explicitly none (no Status board sync). */
   github_board_disabled: boolean;
   integration_id: string | null;
@@ -55,6 +56,7 @@ export async function listProjects(
              i.provider, c.provider_project_name, c.provider_project_url, c.provider_project_id,
              nullif(nullif(c.field_mappings->>'githubProjectNodeId', ''), 'none') as github_project_node_id,
              nullif(c.field_mappings->>'githubProjectTitle', '') as github_project_title,
+             nullif(c.field_mappings->>'githubProjectUrl', '') as github_project_url,
              coalesce(c.field_mappings->>'githubProjectNodeId' = 'none', false) as github_board_disabled,
              c.integration_id, c.publish_outbound
       from projects p
@@ -269,6 +271,7 @@ export async function getProject(userId: string, workspaceId: string, projectId:
              i.provider, c.provider_project_name, c.provider_project_url, c.provider_project_id,
              nullif(nullif(c.field_mappings->>'githubProjectNodeId', ''), 'none') as github_project_node_id,
              nullif(c.field_mappings->>'githubProjectTitle', '') as github_project_title,
+             nullif(c.field_mappings->>'githubProjectUrl', '') as github_project_url,
              coalesce(c.field_mappings->>'githubProjectNodeId' = 'none', false) as github_board_disabled,
              c.integration_id, c.publish_outbound
       from projects p

@@ -50,6 +50,8 @@ export type FieldMappings = {
   githubProjectNodeId?: string;
   /** Display title for the linked Projects v2 board, when known. */
   githubProjectTitle?: string;
+  /** Public Projects v2 board URL, when known. */
+  githubProjectUrl?: string;
 };
 
 /** Stored in `githubProjectNodeId` when the project should not use a Projects v2 board. */

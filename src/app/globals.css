@@ -781,3 +781,61 @@ html[data-motion="off"] [data-reveal-child][data-revealed] {
   transform: none !important;
   animation: none !important;
 }
+
+/* Sync / system toasts (sonner) — sit above the floating + FAB */
+[data-sonner-toaster] {
+  --width: min(22rem, calc(100vw - 2.5rem));
+  font-family: inherit;
+}
+
+[data-sonner-toast].atrium-toast {
+  --normal-bg: var(--card);
+  --normal-border: var(--border);
+  --normal-text: var(--foreground);
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--foreground);
+  border-radius: 0.75rem;
+  box-shadow: 0 12px 32px color-mix(in srgb, var(--foreground) 12%, transparent);
+  padding: 0.85rem 1rem;
+  gap: 0.35rem;
+}
+
+[data-sonner-toast].atrium-toast-success {
+  border-color: color-mix(in srgb, var(--primary) 45%, var(--border));
+}
+
+[data-sonner-toast].atrium-toast-error {
+  border-color: color-mix(in srgb, var(--destructive) 55%, var(--border));
+}
+
+.atrium-toast-title {
+  font-size: 0.875rem;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.atrium-toast-description {
+  font-size: 0.75rem;
+  color: var(--muted);
+  line-height: 1.35;
+}
+
+.atrium-toast-close {
+  background: var(--card) !important;
+  border: 1px solid var(--border) !important;
+  color: var(--muted) !important;
+  opacity: 1 !important;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.atrium-toast-close:hover {
+  background: var(--accent) !important;
+  color: var(--foreground) !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-sonner-toast] {
+    --y: 0 !important;
+  }
+}

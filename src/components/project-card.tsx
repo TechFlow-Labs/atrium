@@ -25,6 +25,7 @@ type ProjectCardProject = {
   provider_project_id?: string | null;
   github_project_node_id?: string | null;
   github_project_title?: string | null;
+  github_project_url?: string | null;
   github_board_disabled?: boolean;
 };
 
@@ -49,8 +50,11 @@ export function ProjectCard({
   const boardTitle = project.github_board_disabled
     ? null
     : project.github_project_title?.trim() || null;
+  const boardUrl = project.github_board_disabled
+    ? null
+    : project.github_project_url?.trim() || null;
   const hasBoard = !project.github_board_disabled
-    && Boolean(project.github_project_node_id?.trim() || boardTitle);
+    && Boolean(project.github_project_node_id?.trim() || boardTitle || boardUrl);
   const showSplitMeta = Boolean(project.provider && codebase);
 
   return (
@@ -105,29 +109,40 @@ export function ProjectCard({
           {showSplitMeta ? (
             <div className="mt-auto space-y-2 border-t pt-3">
               {isGithub ? (
-                <div className="flex min-w-0 items-start gap-2">
-                  <span
-                    className={cn(
-                      "mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-md",
-                      accent.wash,
-                      accent.ink,
-                    )}
-                  >
-                    <Columns3 className="size-3.5" aria-hidden="true" />
-                  </span>
-                  <div className="min-w-0">
-                    <p className="text-[0.65rem] font-medium uppercase tracking-[0.18em] text-muted">
-                      Project board
-                    </p>
-                    <p className={cn("truncate text-xs font-medium", accent.ink)}>
-                      {boardTitle
-                        || (project.github_board_disabled
-                          ? "No board"
-                          : hasBoard
-                            ? "Linked board"
-                            : "No board linked")}
-                    </p>
+                <div className="flex min-w-0 items-center justify-between gap-2">
+                  <div className="flex min-w-0 items-start gap-2">
+                    <span
+                      className={cn(
+                        "mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-md",
+                        accent.wash,
+                        accent.ink,
+                      )}
+                    >
+                      <Columns3 className="size-3.5" aria-hidden="true" />
+                    </span>
+                    <div className="min-w-0">
+                      <p className="text-[0.65rem] font-medium uppercase tracking-[0.18em] text-muted">
+                        Project board
+                      </p>
+                      <p className={cn("truncate text-xs font-medium", accent.ink)}>
+                        {boardTitle
+                          || (project.github_board_disabled
+                            ? "No board"
+                            : hasBoard
+                              ? "Linked board"
+                              : "No board linked")}
+                      </p>
+                    </div>
                   </div>
+                  {boardUrl ? (
+                    <span className="pointer-events-auto relative z-10 shrink-0">
+                      <OpenInProviderButton
+                        provider="github"
+                        href={boardUrl}
+                        label="Open project"
+                      />
+                    </span>
+                  ) : null}
                 </div>
               ) : null}
 

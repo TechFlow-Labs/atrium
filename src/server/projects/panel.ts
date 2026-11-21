@@ -14,6 +14,11 @@ export type ProjectsPanelPayload = {
   analytics: ProjectsAnalytics;
 };
 
+type BoardEnrichment = {
+  title?: string;
+  url?: string;
+};
+
 export async function enrichGithubBoardTitles(
   userId: string,
   workspaceId: string,
@@ -24,32 +29,47 @@ export async function enrichGithubBoardTitles(
       project.provider === "github"
       && project.provider_project_id
       && !project.github_board_disabled
-      && !project.github_project_title?.trim(),
+      && (!project.github_project_title?.trim() || !project.github_project_url?.trim()),
   );
   if (needsEnrichment.length === 0) return projects;
 
-  const titles = new Map<string, string>();
+  const enriched = new Map<string, BoardEnrichment>();
   await Promise.all(
     needsEnrichment.map(async (project) => {
       try {
         const boards = await listGithubProjectsForConnection(userId, workspaceId, project.id);
         if (project.github_project_node_id) {
           const match = boards.find((board) => board.id === project.github_project_node_id);
-          if (match?.title) titles.set(project.id, match.title);
+          if (match) {
+            enriched.set(project.id, {
+              title: match.title || undefined,
+              url: match.url || undefined,
+            });
+          }
           return;
         }
         const suggested = suggestGithubBoard(boards, project.provider_project_id!);
-        if (suggested?.title) titles.set(project.id, suggested.title);
+        if (suggested) {
+          enriched.set(project.id, {
+            title: suggested.title || undefined,
+            url: suggested.url || undefined,
+          });
+        }
       } catch {
         // Keep the tile empty when GitHub is unavailable.
       }
     }),
   );
 
-  if (titles.size === 0) return projects;
+  if (enriched.size === 0) return projects;
   return projects.map((project) => {
-    const title = titles.get(project.id);
-    return title ? { ...project, github_project_title: title } : project;
+    const next = enriched.get(project.id);
+    if (!next) return project;
+    return {
+      ...project,
+      github_project_title: project.github_project_title?.trim() || next.title || null,
+      github_project_url: project.github_project_url?.trim() || next.url || null,
+    };
   });
 }
 
@@ -64,12 +84,12 @@ export async function loadProjectsPanel(
     listProjects(userId, workspaceId, { status, query: filter.query }),
     getProjectsAnalytics(userId, workspaceId, { status }, nowMs),
   ]);
-  const enriched = await enrichGithubBoardTitles(userId, workspaceId, projects);
+  const enrichedProjects = await enrichGithubBoardTitles(userId, workspaceId, projects);
   return {
     status,
     scopeLabel:
       status === "archived" ? "archived projects" : status === "all" ? "all projects" : "active projects",
-    projects: enriched,
+    projects: enrichedProjects,
     analytics,
   };
 }
