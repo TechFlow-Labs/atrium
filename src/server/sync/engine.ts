@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 import { getAdapter } from "../integrations/registry";
+import { githubRepoFromIssueUrl } from "../integrations/github";
 import { ensureFreshCredentials, runWithCredentialRetry } from "../integrations/token-refresh";
 import { ProviderError, type FieldMappings, type ProviderId, type RemoteTask } from "../integrations/types";
 import { logError } from "../log";
@@ -179,7 +180,28 @@ export async function applyInboundTask(input: {
         and entity_type = 'issue'
         and provider_id = ${input.remote.providerId}
     `);
-    const record = records[0];
+    let record = records[0];
+    if (record?.local_entity_id && input.provider === "github") {
+      const bound = await tx.execute<{ external_url: string | null }>(sql`
+        select external_url from tasks where id = ${record.local_entity_id}::uuid
+      `);
+      const boundRepo = githubRepoFromIssueUrl(bound[0]?.external_url);
+      // Cross-repo ghost from bare issue-number collisions: drop the link and recreate.
+      if (boundRepo && boundRepo !== input.remote.providerProjectId) {
+        await tx.execute(sql`
+          update tasks
+          set deleted_at = coalesce(deleted_at, now()), sync_state = 'tombstone', version = version + 1
+          where id = ${record.local_entity_id}::uuid
+        `);
+        await tx.execute(sql`
+          delete from external_records
+          where integration_id = ${input.integrationId}::uuid
+            and entity_type = 'issue'
+            and provider_id = ${input.remote.providerId}
+        `);
+        record = { local_entity_id: null, recent_outbound_fingerprints: null };
+      }
+    }
     if (!record?.local_entity_id) {
       if (connection.ownership_mode !== "external") {
         await tx.execute(sql`

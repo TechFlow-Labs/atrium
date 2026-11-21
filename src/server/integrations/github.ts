@@ -85,6 +85,19 @@ export function githubIssueProviderId(repoFullName: string, issueNumber: number 
   return `${repoFullName}#${issueNumber}`;
 }
 
+/** Strip `owner/repo#` from a namespaced provider id for REST issue URLs. */
+export function githubIssueNumber(providerId: string): string {
+  const hash = providerId.lastIndexOf("#");
+  return hash >= 0 ? providerId.slice(hash + 1) : providerId;
+}
+
+/** `owner/repo` from an issue URL, when present. */
+export function githubRepoFromIssueUrl(url: string | null | undefined): string | null {
+  if (!url) return null;
+  const match = url.match(/github\.com\/([^/]+\/[^/]+)/i);
+  return match?.[1] ?? null;
+}
+
 function toRemote(
   issue: GhIssue,
   projectId: string,
@@ -105,12 +118,16 @@ function toRemote(
     assigneeLabel: issue.assignee?.login ?? null,
     url: issue.html_url,
     updatedAt: issue.updated_at,
-    archived: closed || status === "done" || status === "cancelled",
+    // Keep Done/Cancelled visible in Atrium. Soft-delete only on GitHub delete webhooks
+    // / reconcile tombstones — Project Status "Done" must not hide board items.
+    archived: false,
     raw: {
       nodeId: issue.node_id ?? issue.id,
       restId: issue.id,
       labels: (issue.labels ?? []).map((label) => label.name),
       projectStatus: projectStatusName ?? null,
+      issueState: issue.state,
+      closed,
     },
   };
 }
@@ -245,8 +262,9 @@ export const githubAdapter: IntegrationAdapter = {
     };
   },
   async getTask(ctx, providerId, providerProjectId) {
+    const issueNumber = githubIssueNumber(providerId);
     const { data } = await gh<GhIssue>(
-      `https://api.github.com/repos/${repo(providerProjectId)}/issues/${encodeURIComponent(providerId)}`,
+      `https://api.github.com/repos/${repo(providerProjectId)}/issues/${encodeURIComponent(issueNumber)}`,
       ctx.credentials.accessToken,
     );
     return enrichWithProjectStatus(ctx.credentials.accessToken, providerProjectId, data, ctx.mappings);
@@ -285,8 +303,9 @@ export const githubAdapter: IntegrationAdapter = {
     return toRemote(data, input.providerProjectId, ctx.mappings, projectStatus);
   },
   async updateTask(ctx, providerId, input) {
+    const issueNumber = githubIssueNumber(providerId);
     const { data: currentIssue } = await gh<GhIssue>(
-      `https://api.github.com/repos/${repo(input.providerProjectId)}/issues/${encodeURIComponent(providerId)}`,
+      `https://api.github.com/repos/${repo(input.providerProjectId)}/issues/${encodeURIComponent(issueNumber)}`,
       ctx.credentials.accessToken,
     );
     const current = await enrichWithProjectStatus(
@@ -302,7 +321,7 @@ export const githubAdapter: IntegrationAdapter = {
     if (input.description !== undefined) body.body = input.description;
     if (input.status) body.state = input.status === "done" || input.status === "cancelled" ? "closed" : "open";
     const { data } = await gh<GhIssue>(
-      `https://api.github.com/repos/${repo(input.providerProjectId)}/issues/${encodeURIComponent(providerId)}`,
+      `https://api.github.com/repos/${repo(input.providerProjectId)}/issues/${encodeURIComponent(issueNumber)}`,
       ctx.credentials.accessToken,
       { method: "PATCH", body: JSON.stringify(body) },
     );
@@ -340,8 +359,9 @@ export const githubAdapter: IntegrationAdapter = {
   },
   async listComments(ctx, query) {
     const page = query.cursor ?? "1";
+    const issueNumber = githubIssueNumber(query.providerTaskId);
     const { data, response } = await gh<GhComment[]>(
-      `https://api.github.com/repos/${repo(query.providerProjectId)}/issues/${encodeURIComponent(query.providerTaskId)}/comments?per_page=50&page=${encodeURIComponent(page)}`,
+      `https://api.github.com/repos/${repo(query.providerProjectId)}/issues/${encodeURIComponent(issueNumber)}/comments?per_page=50&page=${encodeURIComponent(page)}`,
       ctx.credentials.accessToken,
     );
     const link = nextLink(response.headers.get("link"));
@@ -360,8 +380,9 @@ export const githubAdapter: IntegrationAdapter = {
   async createComment(ctx, input) {
     const body = input.body.trim();
     if (!body) throw new ProviderError("Comment cannot be empty", "validation", false);
+    const issueNumber = githubIssueNumber(input.providerTaskId);
     const { data } = await gh<GhComment>(
-      `https://api.github.com/repos/${repo(input.providerProjectId)}/issues/${encodeURIComponent(input.providerTaskId)}/comments`,
+      `https://api.github.com/repos/${repo(input.providerProjectId)}/issues/${encodeURIComponent(issueNumber)}/comments`,
       ctx.credentials.accessToken,
       { method: "POST", body: JSON.stringify({ body }) },
     );
