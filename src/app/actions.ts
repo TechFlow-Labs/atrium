@@ -98,6 +98,21 @@ async function userId(): Promise<string> {
   return user.id;
 }
 
+/**
+ * Invalidate console list/detail caches so client navigations (including Back)
+ * do not restore stale RSC payloads after a mutation.
+ */
+function revalidateConsoleData(extra: string[] = []): void {
+  revalidatePath("/home");
+  revalidatePath("/schedule");
+  revalidatePath("/projects", "layout");
+  revalidatePath("/products", "layout");
+  revalidatePath("/tasks", "layout");
+  for (const path of extra) {
+    if (path.startsWith("/")) revalidatePath(path);
+  }
+}
+
 async function clientKey(): Promise<string> {
   const headerStore = await headers();
   return headerStore.get("x-forwarded-for")?.split(",")[0]?.trim() || "local";
@@ -338,7 +353,7 @@ export async function createProductAction(_state: ActionState, formData: FormDat
       name: String(formData.get("name") ?? ""),
       description: String(formData.get("description") ?? ""),
     });
-    revalidatePath("/products");
+    revalidateConsoleData([`/products/${id}`]);
     redirect(`/products/${id}`);
   } catch (error) {
     unstable_rethrow(error);
@@ -352,18 +367,19 @@ export async function updateProductAction(formData: FormData): Promise<void> {
     name: formData.has("name") ? String(formData.get("name") ?? "") : undefined,
     description: formData.has("description") ? String(formData.get("description") ?? "") : undefined,
   });
-  revalidatePath("/products");
-  revalidatePath(`/products/${productId}`);
+  revalidateConsoleData([`/products/${productId}`]);
   redirect(`/products/${productId}`);
 }
 
 export async function archiveProductAction(formData: FormData): Promise<void> {
+  const productId = String(formData.get("productId"));
   await archiveProduct(
     await userId(),
     String(formData.get("workspaceId")),
-    String(formData.get("productId")),
+    productId,
     formData.get("archived") === "true",
   );
+  revalidateConsoleData([`/products/${productId}`]);
   redirect("/products");
 }
 
@@ -371,34 +387,41 @@ export async function deleteProductAction(formData: FormData): Promise<void> {
   const workspaceId = String(formData.get("workspaceId") ?? "");
   const productId = String(formData.get("productId") ?? "");
   await deleteProduct(await userId(), workspaceId, productId);
-  revalidatePath("/products");
-  revalidatePath("/projects");
+  revalidateConsoleData([`/products/${productId}`]);
   redirect("/products");
 }
 
 export async function createProjectAction(_state: ActionState, formData: FormData): Promise<ActionState> {
+  const productId = String(formData.get("productId") ?? "") || null;
   try {
     await createNativeProject(await userId(), String(formData.get("workspaceId")), {
       name: String(formData.get("name") ?? ""),
       description: String(formData.get("description") ?? ""),
-      productId: String(formData.get("productId") ?? "") || null,
+      productId,
     });
   } catch (error) {
     unstable_rethrow(error);
     return { error: error instanceof Error ? error.message : "Could not create the project" };
   }
+  revalidateConsoleData(productId ? [`/products/${productId}`] : []);
   redirect("/projects");
 }
 
 export async function updateProjectAction(formData: FormData): Promise<void> {
   const returnTo = String(formData.get("returnTo") ?? "").trim();
   const projectId = String(formData.get("projectId"));
+  const productId = formData.has("productId") ? String(formData.get("productId") ?? "") || null : null;
   await updateProject(await userId(), String(formData.get("workspaceId")), projectId, {
     name: formData.has("name") ? String(formData.get("name") ?? "") : undefined,
     nickname: formData.has("nickname") ? String(formData.get("nickname") ?? "") : undefined,
     description: formData.has("description") ? String(formData.get("description") ?? "") : undefined,
     productId: formData.has("productId") ? String(formData.get("productId") ?? "") || null : undefined,
   });
+  revalidateConsoleData([
+    `/projects/${projectId}`,
+    ...(productId ? [`/products/${productId}`] : []),
+    ...(returnTo.startsWith("/") ? [returnTo] : []),
+  ]);
   redirect(returnTo || `/projects/${projectId}`);
 }
 
@@ -410,6 +433,7 @@ export async function updateProjectSettingsAction(
   const returnTo = String(formData.get("returnTo") ?? "").trim();
   const workspaceId = String(formData.get("workspaceId"));
   const projectId = String(formData.get("projectId"));
+  const productId = formData.has("productId") ? String(formData.get("productId") ?? "") || null : null;
   try {
     const uid = await userId();
     await updateProject(uid, workspaceId, projectId, {
@@ -433,16 +457,23 @@ export async function updateProjectSettingsAction(
     unstable_rethrow(error);
     return { error: error instanceof Error ? error.message : "Could not update the project" };
   }
+  revalidateConsoleData([
+    `/projects/${projectId}`,
+    ...(productId ? [`/products/${productId}`] : []),
+    ...(returnTo.startsWith("/") ? [returnTo] : []),
+  ]);
   redirect(returnTo || `/projects/${projectId}`);
 }
 
 export async function archiveProjectAction(formData: FormData): Promise<void> {
+  const projectId = String(formData.get("projectId"));
   await archiveProject(
     await userId(),
     String(formData.get("workspaceId")),
-    String(formData.get("projectId")),
+    projectId,
     formData.get("archived") === "true",
   );
+  revalidateConsoleData([`/projects/${projectId}`]);
   redirect("/projects");
 }
 
@@ -454,9 +485,7 @@ export async function deleteProjectAction(
   const projectId = String(formData.get("projectId") ?? "");
   try {
     await deleteProject(await userId(), workspaceId, projectId);
-    revalidatePath("/projects");
-    revalidatePath("/home");
-    revalidatePath("/tasks");
+    revalidateConsoleData([`/projects/${projectId}`]);
   } catch (error) {
     unstable_rethrow(error);
     return { error: error instanceof Error ? error.message : "Could not delete the project" };
@@ -465,11 +494,13 @@ export async function deleteProjectAction(
 }
 
 export async function createMilestoneAction(formData: FormData): Promise<void> {
-  await createMilestone(await userId(), String(formData.get("workspaceId")), String(formData.get("projectId")), {
+  const projectId = String(formData.get("projectId"));
+  await createMilestone(await userId(), String(formData.get("workspaceId")), projectId, {
     name: String(formData.get("name") ?? ""),
     dueAt: String(formData.get("dueAt") ?? "") || null,
   });
-  redirect(`/projects/${formData.get("projectId")}`);
+  revalidateConsoleData([`/projects/${projectId}`]);
+  redirect(`/projects/${projectId}`);
 }
 
 export async function loadTasksPanelAction(
@@ -583,11 +614,12 @@ export async function loadSchedulePanelAction(
 }
 
 export async function createTaskAction(_state: ActionState, formData: FormData): Promise<ActionState> {
+  const returnTo = String(formData.get("returnTo") ?? "/tasks");
+  let projectId = String(formData.get("projectId") ?? "");
   try {
     const uid = await userId();
     const workspaceId = String(formData.get("workspaceId"));
     const destination = String(formData.get("destination") ?? "atrium");
-    let projectId = String(formData.get("projectId") ?? "");
     if (destination === "provider") {
       projectId = await ensureExternalProjectForTask(uid, workspaceId, {
         integrationId: String(formData.get("integrationId") ?? ""),
@@ -613,7 +645,11 @@ export async function createTaskAction(_state: ActionState, formData: FormData):
     unstable_rethrow(error);
     return { error: error instanceof Error ? error.message : "Could not create the task" };
   }
-  redirect(String(formData.get("returnTo") ?? "/tasks"));
+  revalidateConsoleData([
+    `/projects/${projectId}`,
+    ...(returnTo.startsWith("/") ? [returnTo] : []),
+  ]);
+  redirect(returnTo);
 }
 
 export async function listRemoteProjectsForCreateAction(
@@ -656,7 +692,8 @@ export async function listGithubBoardsForCreateAction(
 }
 
 export async function updateTaskAction(formData: FormData): Promise<void> {
-  await updateTask(await userId(), String(formData.get("workspaceId")), String(formData.get("taskId")), {
+  const taskId = String(formData.get("taskId"));
+  await updateTask(await userId(), String(formData.get("workspaceId")), taskId, {
     version: Number(formData.get("version")),
     title: formData.has("title") ? String(formData.get("title")) : undefined,
     description: formData.has("description") ? String(formData.get("description")) : undefined,
@@ -666,9 +703,11 @@ export async function updateTaskAction(formData: FormData): Promise<void> {
     assigneeUserId: formData.has("assigneeUserId") ? String(formData.get("assigneeUserId") ?? "") || null : undefined,
   });
   const returnTo = String(formData.get("returnTo") ?? "/tasks");
+  revalidateConsoleData([
+    `/tasks/${taskId}`,
+    ...(returnTo.startsWith("/") ? [returnTo] : []),
+  ]);
   if (String(formData.get("silent") ?? "") === "1") {
-    revalidatePath("/tasks");
-    revalidatePath(returnTo);
     return;
   }
   redirect(returnTo);
@@ -677,6 +716,7 @@ export async function updateTaskAction(formData: FormData): Promise<void> {
 export async function updateTaskDetailAction(_state: ActionState, formData: FormData): Promise<ActionState> {
   const taskId = String(formData.get("taskId") ?? "");
   const version = Number(formData.get("version"));
+  const returnTo = String(formData.get("returnTo") ?? `/tasks/${taskId}`);
   try {
     await updateTask(await userId(), String(formData.get("workspaceId")), taskId, {
       version,
@@ -691,50 +731,63 @@ export async function updateTaskDetailAction(_state: ActionState, formData: Form
     unstable_rethrow(error);
     return { error: error instanceof Error ? error.message : "Could not update the task" };
   }
+  revalidateConsoleData([
+    `/tasks/${taskId}`,
+    ...(returnTo.startsWith("/") ? [returnTo] : []),
+  ]);
   const silent = String(formData.get("silent") ?? "") === "1";
   if (silent) {
-    revalidatePath(`/tasks/${taskId}`);
     return { notice: "Saved", version: version + 1 };
   }
-  redirect(String(formData.get("returnTo") ?? `/tasks/${taskId}`));
+  redirect(returnTo);
 }
 
 export async function addTaskCommentAction(_state: ActionState, formData: FormData): Promise<ActionState> {
   const taskId = String(formData.get("taskId") ?? "");
+  const returnTo = String(formData.get("returnTo") ?? `/tasks/${taskId}`);
   try {
     await addTaskComment(await userId(), taskId, String(formData.get("body") ?? ""));
   } catch (error) {
     unstable_rethrow(error);
     return { error: error instanceof Error ? error.message : "Could not add the comment" };
   }
-  redirect(String(formData.get("returnTo") ?? `/tasks/${taskId}`));
+  revalidateConsoleData([`/tasks/${taskId}`, ...(returnTo.startsWith("/") ? [returnTo] : [])]);
+  redirect(returnTo);
 }
 
 export async function addTaskLinkAction(_state: ActionState, formData: FormData): Promise<ActionState> {
   const taskId = String(formData.get("taskId") ?? "");
+  const relatedId = String(formData.get("toTaskId") ?? "");
+  const returnTo = String(formData.get("returnTo") ?? `/tasks/${taskId}`);
   try {
     await addTaskLink(await userId(), String(formData.get("workspaceId")), {
       fromTaskId: taskId,
-      toTaskId: String(formData.get("toTaskId") ?? ""),
+      toTaskId: relatedId,
       linkType: String(formData.get("linkType") ?? ""),
     });
   } catch (error) {
     unstable_rethrow(error);
     return { error: error instanceof Error ? error.message : "Could not link the tasks" };
   }
-  revalidatePath(`/tasks/${taskId}`);
-  const relatedId = String(formData.get("toTaskId") ?? "");
-  if (relatedId) revalidatePath(`/tasks/${relatedId}`);
-  redirect(String(formData.get("returnTo") ?? `/tasks/${taskId}`));
+  revalidateConsoleData([
+    `/tasks/${taskId}`,
+    ...(relatedId ? [`/tasks/${relatedId}`] : []),
+    ...(returnTo.startsWith("/") ? [returnTo] : []),
+  ]);
+  redirect(returnTo);
 }
 
 export async function removeTaskLinkAction(formData: FormData): Promise<void> {
   const taskId = String(formData.get("taskId") ?? "");
   const relatedTaskId = String(formData.get("relatedTaskId") ?? "");
+  const returnTo = String(formData.get("returnTo") ?? `/tasks/${taskId}`);
   await removeTaskLink(await userId(), String(formData.get("workspaceId")), String(formData.get("linkId")));
-  revalidatePath(`/tasks/${taskId}`);
-  if (relatedTaskId) revalidatePath(`/tasks/${relatedTaskId}`);
-  redirect(String(formData.get("returnTo") ?? `/tasks/${taskId}`));
+  revalidateConsoleData([
+    `/tasks/${taskId}`,
+    ...(relatedTaskId ? [`/tasks/${relatedTaskId}`] : []),
+    ...(returnTo.startsWith("/") ? [returnTo] : []),
+  ]);
+  redirect(returnTo);
 }
 
 export async function searchTasksForLinkAction(
@@ -758,6 +811,7 @@ export async function bulkTaskAction(formData: FormData): Promise<void> {
     status: formData.get("status") ? (String(formData.get("status")) as "done") : undefined,
     priority: formData.get("priority") ? (String(formData.get("priority")) as "high") : undefined,
   });
+  revalidateConsoleData(ids.map((id) => `/tasks/${id}`));
   redirect("/tasks");
 }
 
@@ -771,9 +825,10 @@ export async function deleteTasksAction(
   const returnTo = String(formData.get("returnTo") ?? "/tasks");
   try {
     await deleteTasks(await userId(), workspaceId, { ids, alsoRemote });
-    revalidatePath("/tasks");
-    revalidatePath("/home");
-    for (const id of ids) revalidatePath(`/tasks/${id}`);
+    revalidateConsoleData([
+      ...ids.map((id) => `/tasks/${id}`),
+      ...(returnTo.startsWith("/") ? [returnTo] : []),
+    ]);
     redirect(returnTo.startsWith("/") ? returnTo : "/tasks");
   } catch (error) {
     unstable_rethrow(error);
@@ -839,7 +894,11 @@ export async function transferTasksAction(
       path: "/",
       secure: process.env.NODE_ENV === "production",
     });
-    revalidatePath("/tasks");
+    revalidateConsoleData([
+      ...ids.map((id) => `/tasks/${id}`),
+      ...result.transferred.map((row) => `/tasks/${row.toId}`),
+      `/projects/${destinationProjectId}`,
+    ]);
     if (result.transferred.length === 1) {
       redirect(`/tasks/${result.transferred[0].toId}`);
     }
@@ -907,6 +966,7 @@ export async function githubAppInstallAction(formData: FormData): Promise<void> 
 
 export async function linkProjectAction(_state: ActionState, formData: FormData): Promise<ActionState> {
   let id: string;
+  const productId = String(formData.get("productId") ?? "") || null;
   try {
     id = await createExternalProject(await userId(), String(formData.get("workspaceId")), {
       integrationId: String(formData.get("integrationId")),
@@ -914,7 +974,7 @@ export async function linkProjectAction(_state: ActionState, formData: FormData)
       name: String(formData.get("name") ?? ""),
       key: String(formData.get("key") ?? "") || null,
       url: String(formData.get("url") ?? "") || null,
-      productId: String(formData.get("productId") ?? "") || null,
+      productId,
       githubProjectNodeId: String(formData.get("githubProjectNodeId") ?? "") || null,
       githubProjectTitle: String(formData.get("githubProjectTitle") ?? "") || null,
     });
@@ -922,6 +982,10 @@ export async function linkProjectAction(_state: ActionState, formData: FormData)
     unstable_rethrow(error);
     return { error: error instanceof Error ? error.message : "Could not link the project" };
   }
+  revalidateConsoleData([
+    `/projects/${id}`,
+    ...(productId ? [`/products/${productId}`] : []),
+  ]);
   redirect(`/projects/${id}`);
 }
 
@@ -960,17 +1024,20 @@ export async function mappingAction(formData: FormData): Promise<void> {
       : {}),
   };
   await updateFieldMappings(await userId(), workspaceId, projectId, mappings);
+  revalidateConsoleData([`/projects/${projectId}`]);
   redirect(`/projects/${projectId}`);
 }
 
 export async function publishAction(formData: FormData): Promise<void> {
+  const projectId = String(formData.get("projectId"));
   await setNativePublishing(
     await userId(),
     String(formData.get("workspaceId")),
-    String(formData.get("projectId")),
+    projectId,
     formData.get("enabled") === "true",
   );
-  redirect(`/projects/${formData.get("projectId")}`);
+  revalidateConsoleData([`/projects/${projectId}`]);
+  redirect(`/projects/${projectId}`);
 }
 
 export async function fakeProjectAction(formData: FormData): Promise<void> {

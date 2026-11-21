@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Archive, Building2, CircleDot, Layers } from "lucide-react";
 import { loadProductsPanelAction, type ActionState } from "@/app/actions";
 import { ProductsBoard } from "@/components/products-board";
@@ -38,6 +38,12 @@ export function ProductsPageClient({
   const [panel, setPanel] = useState(initial);
   const [pending, setPending] = useState(false);
   const requestId = useRef(0);
+
+  useEffect(() => {
+    setStatus(initial.status);
+    setScope(initial.scope);
+    setPanel(initial);
+  }, [initial]);
 
   function load(nextStatus: Status, nextScope: Scope) {
     softReplaceUrl(productsHref(nextStatus, nextScope));

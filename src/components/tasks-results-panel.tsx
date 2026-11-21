@@ -31,6 +31,12 @@ export function TasksResultsPanel({
   const requestId = useRef(0);
 
   useEffect(() => {
+    setPanel(initial);
+    setLoadedKey(initialQueryKey);
+    setError(null);
+  }, [initial, initialQueryKey]);
+
+  useEffect(() => {
     if (queryKey === loadedKey) return;
     const id = ++requestId.current;
     setPending(true);

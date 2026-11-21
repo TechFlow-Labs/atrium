@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { loadSchedulePanelAction } from "@/app/actions";
 import { CalendarGantt, type CalendarGanttTask } from "@/components/calendar-gantt";
@@ -51,6 +51,11 @@ export function SchedulePageClient({
   const [panel, setPanel] = useState(initial);
   const [pending, setPending] = useState(false);
   const requestId = useRef(0);
+
+  useEffect(() => {
+    setView(initial.view);
+    setPanel(initial);
+  }, [initial]);
 
   const start = new Date(panel.startIso);
   const end = new Date(panel.endIso);

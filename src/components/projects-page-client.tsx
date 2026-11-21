@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Archive, CircleDot, Layers } from "lucide-react";
 import { loadProjectsPanelAction, type ActionState } from "@/app/actions";
 import { ProjectsBoard } from "@/components/projects-board";
@@ -36,6 +36,11 @@ export function ProjectsPageClient({
   const [panel, setPanel] = useState(initial);
   const [pending, setPending] = useState(false);
   const requestId = useRef(0);
+
+  useEffect(() => {
+    setStatus(initial.status);
+    setPanel(initial);
+  }, [initial]);
 
   function changeStatus(next: Status) {
     if (next === status) return;

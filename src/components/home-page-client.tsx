@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { AlertTriangle, ArrowRight } from "lucide-react";
 import { loadHomeFeedAction, type ActionState } from "@/app/actions";
@@ -127,6 +127,11 @@ export function HomePageClient({
   const [feed, setFeed] = useState(initialFeed);
   const [pending, setPending] = useState(false);
   const requestId = useRef(0);
+
+  useEffect(() => {
+    setSource(initialFeed.source);
+    setFeed(initialFeed);
+  }, [initialFeed]);
 
   const sourceQuery = source ? `&source=${encodeURIComponent(source)}` : "";
   const dueBefore = feed.weekEnd;
