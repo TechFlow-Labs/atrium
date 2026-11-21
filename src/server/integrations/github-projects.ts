@@ -1,6 +1,6 @@
 import { providerFetch } from "./http";
 import { mapStatusFromProvider, mapStatusToProvider } from "./mappings";
-import { ProviderError, type FieldMappings, type TaskStatus } from "./types";
+import { GITHUB_BOARD_NONE, ProviderError, type FieldMappings, type TaskStatus } from "./types";
 
 const GQL = "https://api.github.com/graphql";
 
@@ -203,6 +203,7 @@ export async function resolveGithubProjectNodeId(
   mappings: FieldMappings,
 ): Promise<string | null> {
   const configured = mappings.githubProjectNodeId?.trim();
+  if (configured === GITHUB_BOARD_NONE) return null;
   if (configured) return configured;
   const projects = await listRepositoryProjectsV2(token, providerProjectId);
   return projects[0]?.id ?? null;

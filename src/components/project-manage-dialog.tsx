@@ -341,13 +341,18 @@ export function ProjectManageDialog({
                           ? "Loading boards…"
                           : boards.length
                             ? "Auto (first board linked to the repository)"
-                            : "No boards found — reconnect GitHub with project scopes",
+                            : "Auto — no boards found on this repository yet",
+                      },
+                      {
+                        value: "none",
+                        label: "No board",
                       },
                       ...boards.map((board) => ({
                         value: board.id,
                         label: `${board.title} (#${board.number})`,
                       })),
                       ...(boardId
+                        && boardId !== "none"
                         && !boards.some((board) => board.id === boardId)
                         ? [{
                             value: boardId,
@@ -357,8 +362,9 @@ export function ProjectManageDialog({
                     ]}
                   />
                   <p className="mt-1 text-xs text-muted">
-                    Two-way Status sync uses this Projects v2 board. Webhook deliveries need the
-                    Projects v2 item event on the org or user that owns the board.
+                    {boardId === "none"
+                      ? "Status sync stays on GitHub Issues only. Project board Status will not be read or written."
+                      : "Two-way Status sync uses this Projects v2 board. Webhook deliveries need the Projects v2 item event on the org or user that owns the board."}
                     {selectedCodebaseId !== project.provider_project_id
                       ? " Save the project codebase first, then save mappings for the new repository."
                       : null}

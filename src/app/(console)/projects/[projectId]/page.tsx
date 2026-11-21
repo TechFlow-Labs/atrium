@@ -87,18 +87,23 @@ async function ProjectContent({ params }: { params: Promise<{ projectId: string 
     project.provider === "github"
       ? await listGithubProjectsForConnection(user.id, current.id, projectId)
       : [];
-  const configuredGithubBoardId = map?.githubProjectNodeId?.trim() || "";
-  let githubProjectUrl =
-    (configuredGithubBoardId
-      ? githubBoards.find((board) => board.id === configuredGithubBoardId)?.url
-      : githubBoards[0]?.url) ?? null;
-  if (!githubProjectUrl && configuredGithubBoardId) {
-    githubProjectUrl = await getGithubProjectBoardUrl(
-      user.id,
-      current.id,
-      projectId,
-      configuredGithubBoardId,
-    );
+  const rawGithubBoardId = map?.githubProjectNodeId?.trim() || "";
+  const boardDisabled = rawGithubBoardId === "none";
+  const configuredGithubBoardId = boardDisabled ? "" : rawGithubBoardId;
+  let githubProjectUrl: string | null = null;
+  if (!boardDisabled) {
+    githubProjectUrl =
+      (configuredGithubBoardId
+        ? githubBoards.find((board) => board.id === configuredGithubBoardId)?.url
+        : githubBoards[0]?.url) ?? null;
+    if (!githubProjectUrl && configuredGithubBoardId) {
+      githubProjectUrl = await getGithubProjectBoardUrl(
+        user.id,
+        current.id,
+        projectId,
+        configuredGithubBoardId,
+      );
+    }
   }
   // eslint-disable-next-line react-hooks/purity -- connection() already opted this request out of prerender
   const now = Date.now();

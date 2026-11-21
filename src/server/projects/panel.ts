@@ -23,6 +23,7 @@ export async function enrichGithubBoardTitles(
     (project) =>
       project.provider === "github"
       && project.provider_project_id
+      && !project.github_board_disabled
       && !project.github_project_title?.trim(),
   );
   if (needsEnrichment.length === 0) return projects;

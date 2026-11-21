@@ -9,6 +9,7 @@ import {
 } from "./github-projects";
 import { mapPriorityToProvider } from "./mappings";
 import {
+  GITHUB_BOARD_NONE,
   operationMarker,
   ProviderError,
   type FieldMappings,
@@ -408,6 +409,7 @@ export const githubAdapter: IntegrationAdapter = {
         const issue = await resolveIssueFromNodeId(ctx.credentials.accessToken, contentId);
         if (!issue) return { events: [] };
         const configured = ctx.mappings.githubProjectNodeId?.trim();
+        if (configured === GITHUB_BOARD_NONE) return { events: [] };
         if (configured && body.projects_v2_item.project_node_id && configured !== body.projects_v2_item.project_node_id) {
           return { events: [] };
         }

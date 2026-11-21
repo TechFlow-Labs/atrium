@@ -933,7 +933,7 @@ export async function mappingAction(formData: FormData): Promise<void> {
     : undefined;
   let githubProjectTitle: string | undefined;
   if (githubProjectNodeId !== undefined) {
-    if (githubProjectNodeId) {
+    if (githubProjectNodeId && githubProjectNodeId !== "none") {
       const boards = await listGithubProjectsForConnection(await userId(), workspaceId, projectId);
       githubProjectTitle = boards.find((board) => board.id === githubProjectNodeId)?.title ?? "";
     } else {

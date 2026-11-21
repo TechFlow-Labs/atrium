@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { suggestGithubBoard } from "@/server/integrations/github-projects";
+import { resolveGithubProjectNodeId, suggestGithubBoard } from "@/server/integrations/github-projects";
+import { GITHUB_BOARD_NONE } from "@/server/integrations/types";
 
 const board = (id: string, title: string) => ({
   id,
@@ -38,5 +39,19 @@ describe("suggestGithubBoard", () => {
         "acme/emblem-ergani-scanner",
       ),
     ).toBeNull();
+  });
+});
+
+describe("resolveGithubProjectNodeId", () => {
+  it("returns null when the board is explicitly disabled", async () => {
+    await expect(
+      resolveGithubProjectNodeId("token", "acme/repo", { githubProjectNodeId: GITHUB_BOARD_NONE }),
+    ).resolves.toBeNull();
+  });
+
+  it("returns a configured board id without calling GitHub", async () => {
+    await expect(
+      resolveGithubProjectNodeId("token", "acme/repo", { githubProjectNodeId: "PVT_abc" }),
+    ).resolves.toBe("PVT_abc");
   });
 });

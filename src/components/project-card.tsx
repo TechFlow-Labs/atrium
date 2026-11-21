@@ -25,6 +25,7 @@ type ProjectCardProject = {
   provider_project_id?: string | null;
   github_project_node_id?: string | null;
   github_project_title?: string | null;
+  github_board_disabled?: boolean;
 };
 
 export function ProjectCard({
@@ -45,8 +46,11 @@ export function ProjectCard({
   const key = providerKey(project.provider);
   const accent = providerAccents[key] ?? providerAccents.native!;
   const isGithub = project.provider === "github";
-  const boardTitle = project.github_project_title?.trim() || null;
-  const hasBoard = Boolean(project.github_project_node_id?.trim() || boardTitle);
+  const boardTitle = project.github_board_disabled
+    ? null
+    : project.github_project_title?.trim() || null;
+  const hasBoard = !project.github_board_disabled
+    && Boolean(project.github_project_node_id?.trim() || boardTitle);
   const showSplitMeta = Boolean(project.provider && codebase);
 
   return (
@@ -117,7 +121,11 @@ export function ProjectCard({
                     </p>
                     <p className={cn("truncate text-xs font-medium", accent.ink)}>
                       {boardTitle
-                        || (hasBoard ? "Linked board" : "No board linked")}
+                        || (project.github_board_disabled
+                          ? "No board"
+                          : hasBoard
+                            ? "Linked board"
+                            : "No board linked")}
                     </p>
                   </div>
                 </div>

@@ -43,12 +43,17 @@ export type FieldMappings = {
   assignees?: Record<string, string>;
   /**
    * GitHub Projects v2 board node id (`PVT_…`).
-   * When set (or auto-discovered for the repo), Atrium syncs Status two-way with that board.
+   * - unset / empty: auto-pick the first board linked to the repository
+   * - `"none"`: explicitly disable Project board Status sync
+   * - `PVT_…`: use that board
    */
   githubProjectNodeId?: string;
   /** Display title for the linked Projects v2 board, when known. */
   githubProjectTitle?: string;
 };
+
+/** Stored in `githubProjectNodeId` when the project should not use a Projects v2 board. */
+export const GITHUB_BOARD_NONE = "none";
 
 export type StoredCredential = {
   accessToken: string;
