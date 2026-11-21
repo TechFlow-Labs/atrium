@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useTransition } from "react";
 import { RefreshCw } from "lucide-react";
 import { toast } from "sonner";
@@ -13,6 +14,7 @@ export function SyncButton({
   workspaceId: string;
   className?: string;
 }) {
+  const router = useRouter();
   const [pending, startTransition] = useTransition();
 
   return (
@@ -34,6 +36,8 @@ export function SyncButton({
             });
             return;
           }
+          // Server action revalidates paths; refresh the open route so RSC data updates in place.
+          router.refresh();
           toast.success(result.notice ?? "Sync completed successfully.", {
             duration: 4500,
           });

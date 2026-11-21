@@ -449,15 +449,17 @@ export async function reconcileConnection(connectionId: string): Promise<void> {
     const rows = await tx.execute<{
       integration_id: string;
       workspace_id: string;
+      project_id: string;
       provider: ProviderId;
       provider_project_id: string;
       field_mappings: FieldMappings;
       credential_ciphertext: string | null;
       status: string;
       cursor: string | null;
+      last_success_at: Date | null;
     }>(sql`
-      select c.integration_id, c.workspace_id, i.provider, c.provider_project_id, c.field_mappings,
-             i.credential_ciphertext, i.status, s.cursor
+      select c.integration_id, c.workspace_id, c.project_id, i.provider, c.provider_project_id, c.field_mappings,
+             i.credential_ciphertext, i.status, s.cursor, s.last_success_at
       from project_connections c
       join integrations i on i.id = c.integration_id
       left join integration_sync_cursors s on s.integration_id = i.id and s.resource = 'issues'
@@ -475,9 +477,11 @@ export async function reconcileConnection(connectionId: string): Promise<void> {
     }),
   );
   const adapter = getAdapter(meta.provider);
-  const startedAtNull = !meta.cursor;
+  // Cursor is null after a full pull finishes — do not treat that as "initial sync".
+  const isInitialSync = !meta.last_success_at;
   const seen: string[] = [];
-  let cursor = meta.cursor;
+  // Empty-string cursors must not be sent to providers (GitHub page="" is not page 1).
+  let cursor = meta.cursor?.trim() || null;
   let guard = 0;
   try {
     do {
@@ -517,24 +521,40 @@ export async function reconcileConnection(connectionId: string): Promise<void> {
       cursor = page.nextCursor;
       guard += 1;
     } while (cursor && guard < 20);
-    if (startedAtNull && !cursor) {
+    if (isInitialSync && !cursor) {
+      // Only tombstone issues for this connection's project — never the whole integration.
       await withWorker(async (tx) => {
-        const existing = await tx.execute<{ provider_id: string }>(sql`
-          select provider_id from external_records
-          where integration_id = ${meta.integration_id}::uuid and entity_type = 'issue' and deleted_at is null
+        const existing = await tx.execute<{ provider_id: string; local_entity_id: string | null }>(sql`
+          select er.provider_id, er.local_entity_id
+          from external_records er
+          left join tasks t on t.id = er.local_entity_id
+          where er.integration_id = ${meta.integration_id}::uuid
+            and er.entity_type = 'issue'
+            and er.deleted_at is null
+            and (
+              t.project_id = ${meta.project_id}::uuid
+              or (
+                er.local_entity_id is null
+                and (
+                  er.provider_id like ${`${meta.provider_project_id}#%`}
+                  or er.raw->>'providerProjectId' = ${meta.provider_project_id}
+                )
+              )
+            )
         `);
         for (const row of existing) {
           if (!seen.includes(row.provider_id)) {
-            await tx.execute(sql`
-              update tasks set deleted_at = coalesce(deleted_at, now()), sync_state = 'tombstone'
-              where id in (
-                select local_entity_id from external_records
-                where integration_id = ${meta.integration_id}::uuid and provider_id = ${row.provider_id} and local_entity_id is not null
-              )
-            `);
+            if (row.local_entity_id) {
+              await tx.execute(sql`
+                update tasks set deleted_at = coalesce(deleted_at, now()), sync_state = 'tombstone'
+                where id = ${row.local_entity_id}::uuid
+              `);
+            }
             await tx.execute(sql`
               update external_records set deleted_at = now()
-              where integration_id = ${meta.integration_id}::uuid and provider_id = ${row.provider_id}
+              where integration_id = ${meta.integration_id}::uuid
+                and entity_type = 'issue'
+                and provider_id = ${row.provider_id}
             `);
           }
         }

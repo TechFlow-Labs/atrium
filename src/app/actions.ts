@@ -1070,7 +1070,8 @@ export async function resolveAction(formData: FormData): Promise<void> {
 export async function syncNowAction(workspaceId: string): Promise<ActionState> {
   try {
     const result = await syncWorkspaceNow(await userId(), workspaceId);
-    revalidateConsoleData(["/sync", "/tasks", "/projects", "/home"]);
+    // Invalidate list/detail caches; the Sync button also calls router.refresh() for the open page.
+    revalidateConsoleData(["/sync", "/tasks", "/projects", "/products", "/home", "/schedule"]);
     if (result.synced === 0) {
       return { notice: "Nothing to sync — connect a project first." };
     }

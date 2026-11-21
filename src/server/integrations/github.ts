@@ -80,6 +80,11 @@ function priorityFromLabels(labels: Array<{ name: string }>, mappings: FieldMapp
   return "none";
 }
 
+/** Issue numbers are per-repo; namespace by repo so one GitHub App can sync many codebases. */
+export function githubIssueProviderId(repoFullName: string, issueNumber: number | string): string {
+  return `${repoFullName}#${issueNumber}`;
+}
+
 function toRemote(
   issue: GhIssue,
   projectId: string,
@@ -89,7 +94,7 @@ function toRemote(
   const closed = issue.state === "closed";
   const status = atriumStatusFromProjectName(projectStatusName, mappings, closed);
   return {
-    providerId: String(issue.number),
+    providerId: githubIssueProviderId(projectId, issue.number),
     providerProjectId: projectId,
     title: issue.title,
     description: issue.body ?? "",
@@ -392,7 +397,13 @@ export const githubAdapter: IntegrationAdapter = {
     const projectId = body.repository?.full_name ?? null;
     if (event === "issues" && body.issue && projectId) {
       if (body.action === "deleted") {
-        return { events: [{ kind: "task.delete", providerId: String(body.issue.number), providerProjectId: projectId }] };
+        return {
+          events: [{
+            kind: "task.delete",
+            providerId: githubIssueProviderId(projectId, body.issue.number),
+            providerProjectId: projectId,
+          }],
+        };
       }
       const task = await enrichWithProjectStatus(
         ctx.credentials.accessToken,
