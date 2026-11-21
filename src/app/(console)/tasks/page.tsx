@@ -15,6 +15,7 @@ import { isTaskProvider } from "@/server/integrations/types";
 import { listProducts } from "@/server/products/service";
 import { listProjects } from "@/server/projects/service";
 import { loadTasksPanel } from "@/server/tasks/panel";
+import { projectDisplayName } from "@/lib/project-display";
 import { tasksDataQueryKey, type FilterValues } from "@/lib/task-filters";
 
 export const instant = false;
@@ -75,7 +76,7 @@ async function TasksContent({
   const canWrite = current.role !== "viewer";
   const projectOptions = projects.map((project) => ({
     id: project.id,
-    name: project.nickname?.trim() || project.name,
+    name: projectDisplayName(project),
     productId: project.product_id,
     provider: project.provider,
     ownershipMode: project.ownership_mode,

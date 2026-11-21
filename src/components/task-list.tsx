@@ -37,6 +37,7 @@ export type TaskListItem = {
   dueAt: Date | string | null;
   projectId?: string;
   projectName: string;
+  codebaseLabel?: string | null;
   assigneeLabel: string | null;
 };
 
@@ -352,7 +353,16 @@ function TaskListRow({
             <span className="min-w-0">{task.title}</span>
           </p>
           <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-            {hideProjectBadge ? null : <Badge tone="project">{task.projectName}</Badge>}
+            {hideProjectBadge ? null : (
+              <>
+                <Badge tone="project">{task.projectName}</Badge>
+                {task.codebaseLabel ? (
+                  <Badge tone="none" className="normal-case">
+                    {task.codebaseLabel}
+                  </Badge>
+                ) : null}
+              </>
+            )}
             <Badge tone={task.assigneeLabel ? "due" : "none"}>
               {task.assigneeLabel || "Unassigned"}
             </Badge>

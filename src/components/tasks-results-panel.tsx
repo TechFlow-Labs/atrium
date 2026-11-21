@@ -103,6 +103,7 @@ export function TasksResultsPanel({
             version: task.version,
             provider: task.provider,
             project_name: task.projectName,
+            codebase_label: task.codebaseLabel,
             external_url: task.externalUrl,
           }))}
           providerTileStyles={panel.providerTileStyles}
@@ -140,6 +141,7 @@ export function TasksResultsPanel({
             dueAt: task.dueAt,
             projectId: task.projectId,
             projectName: task.projectName,
+            codebaseLabel: task.codebaseLabel,
             assigneeLabel: task.assigneeLabel,
             provider: task.provider,
             externalUrl: task.externalUrl,

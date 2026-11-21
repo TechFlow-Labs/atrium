@@ -37,6 +37,7 @@ type BoardTask = {
   version: number;
   provider: string | null;
   project_name: string;
+  codebase_label?: string | null;
   external_url: string | null;
 };
 
@@ -136,7 +137,12 @@ function TaskCardBody({
         {related ? <Link2 className="size-3.5 shrink-0 text-primary" aria-hidden="true" /> : null}
         <span className="min-w-0">{task.title}</span>
       </p>
-      <p className={cn("text-xs", accent ? accent.ink : "text-muted")}>{task.project_name}</p>
+      <div className={cn("mt-0.5 space-y-0.5 text-xs", accent ? accent.ink : "text-muted")}>
+        <p className="truncate">{task.project_name}</p>
+        {task.codebase_label ? (
+          <p className="truncate normal-case opacity-80" title="Codebase">{task.codebase_label}</p>
+        ) : null}
+      </div>
       <div className="mt-2 flex flex-wrap gap-1">
         <Badge tone={task.priority}>
           <PriorityIcon priority={task.priority} className="size-3.5" />

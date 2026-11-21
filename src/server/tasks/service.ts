@@ -5,6 +5,7 @@ import { requireAction } from "../authz/membership";
 import { withUser, type Tx } from "../db/client";
 import { textArray } from "../db/sql";
 import { areDevMocksVisible, sqlDevMockProjectVisible } from "../dev/mock-data";
+import { projectIssueLabels } from "@/lib/project-display";
 import { getAdapter } from "../integrations/registry";
 import type { ProviderId, TaskPriority, TaskStatus } from "../integrations/types";
 import type { CanonicalField } from "../sync/fingerprint";
@@ -20,7 +21,10 @@ export type TaskRecord = {
   id: string;
   workspace_id: string;
   project_id: string;
+  /** Display label: nickname, GitHub Project board title, or project name. */
   project_name: string;
+  /** Repo / codebase when distinct from the board/nickname label. */
+  codebase_label: string | null;
   ownership_mode: "native" | "external" | "hybrid";
   milestone_id: string | null;
   title: string;
@@ -38,6 +42,66 @@ export type TaskRecord = {
   deleted_at: Date | null;
   updated_at: Date;
 };
+
+type TaskRow = Omit<TaskRecord, "project_name" | "codebase_label"> & {
+  project_raw_name: string;
+  project_nickname: string | null;
+  provider_project_id: string | null;
+  provider_project_name: string | null;
+  github_project_title: string | null;
+  github_board_disabled: boolean;
+  connection_provider: ProviderId | null;
+};
+
+function toTaskRecord(row: TaskRow): TaskRecord {
+  const labels = projectIssueLabels({
+    name: row.project_raw_name,
+    nickname: row.project_nickname,
+    provider: row.connection_provider ?? row.provider,
+    provider_project_id: row.provider_project_id,
+    provider_project_name: row.provider_project_name,
+    github_project_title: row.github_project_title,
+    github_board_disabled: row.github_board_disabled,
+  });
+  return {
+    id: row.id,
+    workspace_id: row.workspace_id,
+    project_id: row.project_id,
+    project_name: labels.primary,
+    codebase_label: labels.codebase,
+    ownership_mode: row.ownership_mode,
+    milestone_id: row.milestone_id,
+    title: row.title,
+    description: row.description,
+    status: row.status,
+    priority: row.priority,
+    due_at: row.due_at,
+    assignee_user_id: row.assignee_user_id,
+    assignee_label: row.assignee_label,
+    provider: row.provider,
+    external_url: row.external_url,
+    sync_state: row.sync_state,
+    sync_error: row.sync_error,
+    version: row.version,
+    deleted_at: row.deleted_at,
+    updated_at: row.updated_at,
+  };
+}
+
+const TASK_PROJECT_SELECT = sql`
+  t.id, t.workspace_id, t.project_id,
+  p.name as project_raw_name,
+  p.nickname as project_nickname,
+  p.ownership_mode,
+  t.milestone_id, t.title, t.description, t.status, t.priority, t.due_at,
+  t.assignee_user_id, coalesce(u.name, t.assignee_label) as assignee_label,
+  t.provider, t.external_url, t.sync_state, t.sync_error, t.version, t.deleted_at, t.updated_at,
+  c.provider_project_id,
+  c.provider_project_name,
+  nullif(c.field_mappings->>'githubProjectTitle', '') as github_project_title,
+  coalesce(c.field_mappings->>'githubProjectNodeId' = 'none', false) as github_board_disabled,
+  i.provider as connection_provider
+`;
 
 export type TaskInput = {
   projectId: string;
@@ -179,15 +243,12 @@ export async function getTask(
 ): Promise<TaskRecord | null> {
   return withUser(userId, async (tx) => {
     // RLS scopes rows to workspaces the caller can access.
-    const rows = await tx.execute<TaskRecord>(sql`
-      select t.id, t.workspace_id, t.project_id,
-             coalesce(nullif(btrim(p.nickname), ''), p.name) as project_name,
-             p.ownership_mode,
-             t.milestone_id, t.title, t.description, t.status, t.priority, t.due_at,
-             t.assignee_user_id, coalesce(u.name, t.assignee_label) as assignee_label,
-             t.provider, t.external_url, t.sync_state, t.sync_error, t.version, t.deleted_at, t.updated_at
+    const rows = await tx.execute<TaskRow>(sql`
+      select ${TASK_PROJECT_SELECT}
       from tasks t
       join projects p on p.id = t.project_id
+      left join project_connections c on c.project_id = p.id
+      left join integrations i on i.id = c.integration_id
       left join "user" u on u.id = t.assignee_user_id
       where t.id = ${taskId}::uuid
         and t.deleted_at is null
@@ -196,7 +257,7 @@ export async function getTask(
     const task = rows[0];
     if (!task) return null;
     await requireAction(tx, task.workspace_id, "task.read");
-    return task;
+    return toTaskRecord(task);
   });
 }
 
@@ -242,15 +303,12 @@ export async function listTasks(
     const projectFilter = textArray(projectIds);
     const productFilter = textArray(productIds);
     const providerFilter = textArray(providerSources);
-    return tx.execute<TaskRecord>(sql`
-      select t.id, t.workspace_id, t.project_id,
-             coalesce(nullif(btrim(p.nickname), ''), p.name) as project_name,
-             p.ownership_mode,
-             t.milestone_id, t.title, t.description, t.status, t.priority, t.due_at,
-             t.assignee_user_id, coalesce(u.name, t.assignee_label) as assignee_label,
-             t.provider, t.external_url, t.sync_state, t.sync_error, t.version, t.deleted_at, t.updated_at
+    const rows = await tx.execute<TaskRow>(sql`
+      select ${TASK_PROJECT_SELECT}
       from tasks t
       join projects p on p.id = t.project_id
+      left join project_connections c on c.project_id = p.id
+      left join integrations i on i.id = c.integration_id
       left join "user" u on u.id = t.assignee_user_id
       where t.workspace_id = ${workspaceId}::uuid
         and (${filter.includeDeleted ?? false} or t.deleted_at is null)
@@ -291,6 +349,7 @@ export async function listTasks(
         t.updated_at desc
       limit 300
     `);
+    return rows.map(toTaskRecord);
   });
 }
 

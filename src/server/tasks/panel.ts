@@ -27,6 +27,8 @@ export type TasksPanelTask = {
   dueAt: string | null;
   projectId: string;
   projectName: string;
+  /** Repo path when the issue also belongs to a GitHub Project board / nicknamed project. */
+  codebaseLabel: string | null;
   assigneeLabel: string | null;
   provider: string | null;
   externalUrl: string | null;
@@ -103,6 +105,7 @@ export async function loadTasksPanel(
       dueAt: task.due_at ? new Date(task.due_at).toISOString() : null,
       projectId: task.project_id,
       projectName: task.project_name,
+      codebaseLabel: task.codebase_label,
       assigneeLabel: task.assignee_label,
       provider: task.provider,
       externalUrl: task.external_url,
