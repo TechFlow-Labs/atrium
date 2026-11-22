@@ -32,6 +32,7 @@ export type ProjectFormIntegration = {
 export type ProjectFormProduct = {
   id: string;
   name: string;
+  parentId?: string | null;
 };
 
 type RemoteProjectOption = {

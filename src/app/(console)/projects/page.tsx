@@ -63,7 +63,11 @@ async function ProjectsContent({ searchParams }: { searchParams: Promise<{ statu
       provider: integration.provider,
       displayName: integration.display_name,
     }));
-  const productOptions = products.map((product) => ({ id: product.id, name: product.name }));
+  const productOptions = products.map((product) => ({
+    id: product.id,
+    name: product.name,
+    parentId: product.parent_id,
+  }));
   const layout =
     parseProjectsLayoutCookie(cookieStore.get("atrium_projects_layout")?.value) ??
     (prefRows[0]?.projects_layout != null

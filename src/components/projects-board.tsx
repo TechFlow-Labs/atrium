@@ -41,6 +41,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { projectDisplayName } from "@/lib/project-display";
+import { groupProjectsByProduct } from "@/lib/project-product-groups";
 import {
   DEFAULT_PROJECTS_LAYOUT,
   moveLayoutItem,
@@ -65,6 +66,8 @@ type ProjectRow = {
   nickname: string | null;
   description: string | null;
   ownership_mode: "native" | "external" | "hybrid";
+  product_id?: string | null;
+  product_name?: string | null;
   provider: string | null;
   provider_project_name: string | null;
   provider_project_url: string | null;
@@ -518,6 +521,7 @@ export function ProjectsBoard({
   const hiddenStats = layout.stats.filter((item) => item.hidden);
   const hiddenInsights = layout.insights.filter((item) => item.hidden);
   const hiddenSections = layout.sections.filter((item) => item.hidden);
+  const productGroups = groupProjectsByProduct(projects, products);
 
   return (
     <div className={cn("space-y-8", editing && "pb-24")} data-no-reveal="" data-tour="projects-board">
@@ -823,16 +827,55 @@ export function ProjectsBoard({
                     ) : null}
                   </div>
                 ) : (
-                  <ul className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-                    {projects.map((project) => (
-                      <ProjectCard
-                        key={project.id}
-                        workspaceId={workspaceId}
-                        project={project}
-                        canWrite={canWrite}
-                      />
-                    ))}
-                  </ul>
+                  <div className="space-y-8">
+                    {productGroups.map((group) => {
+                      const groupCount =
+                        group.projects.length
+                        + group.children.reduce((sum, child) => sum + child.projects.length, 0);
+                      return (
+                      <div key={group.id} className="space-y-5">
+                        <div className="flex flex-wrap items-baseline justify-between gap-2">
+                          <h3 className="text-xl font-medium tracking-tight">{group.name}</h3>
+                          <p className="text-xs text-muted">
+                            {groupCount} {groupCount === 1 ? "project" : "projects"}
+                          </p>
+                        </div>
+                        {group.projects.length > 0 ? (
+                          <ul className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                            {group.projects.map((project) => (
+                              <ProjectCard
+                                key={project.id}
+                                workspaceId={workspaceId}
+                                project={project}
+                                canWrite={canWrite}
+                              />
+                            ))}
+                          </ul>
+                        ) : null}
+                        {group.children.map((child) => (
+                          <div key={child.id} className="space-y-3">
+                            <div className="flex flex-wrap items-baseline gap-2 border-l-2 border-border/80 pl-3">
+                              <h4 className="text-sm font-medium">{child.name}</h4>
+                              <span className="text-[11px] uppercase tracking-wide text-muted">
+                                Subproduct
+                              </span>
+                            </div>
+                            <ul className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                              {child.projects.map((project) => (
+                                <ProjectCard
+                                  key={project.id}
+                                  workspaceId={workspaceId}
+                                  project={project}
+                                  canWrite={canWrite}
+                                />
+                              ))}
+                            </ul>
+                          </div>
+                        ))}
+                      </div>
+                      );
+                    })}
+                  </div>
                 )}
               </section>
             );
