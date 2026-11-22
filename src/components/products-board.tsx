@@ -13,12 +13,18 @@ import {
   Siren,
 } from "lucide-react";
 import { switchWorkspaceAction, type ActionState } from "@/app/actions";
+import { GroupProductsDialog } from "@/components/group-products-dialog";
 import { ProductForm } from "@/components/product-form";
 import { ProjectStatCard } from "@/components/project-dashboard";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { nestProductRecords } from "@/lib/product-tree";
 import { cn } from "@/lib/utils";
-import type { ProductRecord, ProductsAnalytics, WorkspaceProductPortfolio } from "@/server/products/service";
+import type {
+  ProductRecord,
+  ProductsAnalytics,
+  WorkspaceProductPortfolio,
+} from "@/server/products/service";
 
 type CreateProductAction = (state: ActionState, formData: FormData) => Promise<ActionState>;
 
@@ -26,20 +32,31 @@ function ProductCard({
   product,
   href,
   onOpenOtherWorkspace,
+  nested = false,
 }: {
   product: ProductRecord;
   href?: string;
   onOpenOtherWorkspace?: () => void;
+  nested?: boolean;
 }) {
   const body = (
     <>
       <div className="flex items-start justify-between gap-2">
-        <h2 className="text-lg font-medium leading-snug">{product.name}</h2>
-        {product.status === "archived" ? (
-          <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">
-            Archived
-          </span>
-        ) : null}
+        <h2 className={cn("font-medium leading-snug", nested ? "text-base" : "text-lg")}>
+          {product.name}
+        </h2>
+        <div className="flex shrink-0 flex-wrap items-center justify-end gap-1">
+          {!nested && product.child_count > 0 ? (
+            <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">
+              {product.child_count} {product.child_count === 1 ? "subproduct" : "subproducts"}
+            </span>
+          ) : null}
+          {product.status === "archived" ? (
+            <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">
+              Archived
+            </span>
+          ) : null}
+        </div>
       </div>
       {product.description ? (
         <p className="mt-2 line-clamp-2 text-sm text-muted">{product.description}</p>
@@ -66,7 +83,8 @@ function ProductCard({
   );
 
   const className = cn(
-    "flex min-h-[11rem] flex-col rounded-xl border bg-card p-4 text-left transition",
+    "flex flex-col rounded-xl border bg-card p-4 text-left transition",
+    nested ? "min-h-[9rem]" : "min-h-[11rem]",
     "hover:-translate-y-0.5 hover:border-foreground/20 hover:shadow-[0_12px_28px_-18px_rgba(0,0,0,0.55)]",
   );
 
@@ -130,6 +148,7 @@ export function ProductsBoard({
   portfolios: WorkspaceProductPortfolio[];
 }) {
   const { portfolio, issues } = analytics;
+  const nestedProducts = nestProductRecords(products);
 
   return (
     <div className="space-y-8" data-tour="products-board">
@@ -146,7 +165,10 @@ export function ProductsBoard({
           {scopeNav}
           {statusNav}
           {canWrite && scope === "current" ? (
-            <ProductForm workspaceId={workspaceId} action={createAction} />
+            <>
+              <GroupProductsDialog workspaceId={workspaceId} products={products} />
+              <ProductForm workspaceId={workspaceId} action={createAction} />
+            </>
           ) : null}
         </div>
       </div>
@@ -220,16 +242,25 @@ export function ProductsBoard({
             />
           </section>
 
-          {products.length === 0 ? (
+          {nestedProducts.length === 0 ? (
             <div className="rounded-xl border border-dashed px-6 py-16 text-center">
               <Boxes className="mx-auto size-8 text-muted" aria-hidden="true" />
               <p className="mt-3 text-sm text-muted">No products in this view yet.</p>
             </div>
           ) : (
             <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-              {products.map((product) => (
-                <li key={product.id}>
+              {nestedProducts.map((product) => (
+                <li key={product.id} className="space-y-2">
                   <ProductCard product={product} />
+                  {product.children.length > 0 ? (
+                    <ul className="ml-3 space-y-2 border-l border-border/70 pl-3">
+                      {product.children.map((child) => (
+                        <li key={child.id}>
+                          <ProductCard product={child} nested />
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
                 </li>
               ))}
             </ul>
@@ -242,7 +273,9 @@ export function ProductsBoard({
               No workspaces found.
             </div>
           ) : (
-            portfolios.map((portfolioRow) => (
+            portfolios.map((portfolioRow) => {
+              const nested = nestProductRecords(portfolioRow.products);
+              return (
               <section key={portfolioRow.workspace_id} className="space-y-4">
                 <div className="flex flex-wrap items-end justify-between gap-3">
                   <div>
@@ -273,14 +306,14 @@ export function ProductsBoard({
                   ) : null}
                 </div>
 
-                {portfolioRow.products.length === 0 ? (
+                {nested.length === 0 ? (
                   <p className="rounded-xl border border-dashed px-4 py-8 text-sm text-muted">
                     No products in this workspace for the current filters.
                   </p>
                 ) : (
                   <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                    {portfolioRow.products.map((product) => (
-                      <li key={product.id}>
+                    {nested.map((product) => (
+                      <li key={product.id} className="space-y-2">
                         {portfolioRow.workspace_id === workspaceId ? (
                           <ProductCard product={product} />
                         ) : (
@@ -293,12 +326,37 @@ export function ProductsBoard({
                             )}
                           </WorkspaceProductLink>
                         )}
+                        {product.children.length > 0 ? (
+                          <ul className="ml-3 space-y-2 border-l border-border/70 pl-3">
+                            {product.children.map((child) => (
+                              <li key={child.id}>
+                                {portfolioRow.workspace_id === workspaceId ? (
+                                  <ProductCard product={child} nested />
+                                ) : (
+                                  <WorkspaceProductLink
+                                    workspaceId={portfolioRow.workspace_id}
+                                    productId={child.id}
+                                  >
+                                    {(open) => (
+                                      <ProductCard
+                                        product={child}
+                                        nested
+                                        onOpenOtherWorkspace={open}
+                                      />
+                                    )}
+                                  </WorkspaceProductLink>
+                                )}
+                              </li>
+                            ))}
+                          </ul>
+                        ) : null}
                       </li>
                     ))}
                   </ul>
                 )}
               </section>
-            ))
+            );
+            })
           )}
         </div>
       )}

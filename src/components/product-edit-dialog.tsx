@@ -29,9 +29,17 @@ export function ProductEditDialog({
     name: string;
     description: string;
     status: "active" | "archived";
+    child_count?: number;
+    project_count?: number;
   };
   canDelete: boolean;
 }) {
+  const deleteHint =
+    (product.child_count ?? 0) > 0
+      ? "Move or delete subproducts first to remove this product."
+      : (product.project_count ?? 0) > 0
+        ? "Delete projects first to remove this product."
+        : null;
   const [open, setOpen] = useState(false);
 
   return (
@@ -96,9 +104,9 @@ export function ProductEditDialog({
                 Delete product
               </Button>
             </form>
-          ) : (
-            <p className="text-xs text-muted">Delete projects first to remove this product.</p>
-          )}
+          ) : deleteHint ? (
+            <p className="text-xs text-muted">{deleteHint}</p>
+          ) : null}
         </div>
       </DialogContent>
     </Dialog>

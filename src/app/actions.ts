@@ -34,8 +34,10 @@ import {
 } from "@/server/projects/service";
 import {
   archiveProduct,
+  attachProductsAsChildren,
   createProduct,
   deleteProduct,
+  groupProducts,
   updateProduct,
 } from "@/server/products/service";
 import { addTaskComment } from "@/server/tasks/comments";
@@ -350,15 +352,55 @@ export async function removeMemberAction(formData: FormData): Promise<void> {
 
 export async function createProductAction(_state: ActionState, formData: FormData): Promise<ActionState> {
   try {
+    const parentId = String(formData.get("parentId") ?? "").trim() || null;
     const id = await createProduct(await userId(), String(formData.get("workspaceId")), {
       name: String(formData.get("name") ?? ""),
       description: String(formData.get("description") ?? ""),
+      parentId,
     });
-    revalidateConsoleData([`/products/${id}`]);
+    revalidateConsoleData([`/products/${id}`, ...(parentId ? [`/products/${parentId}`] : [])]);
     redirect(`/products/${id}`);
   } catch (error) {
     unstable_rethrow(error);
     return { error: error instanceof Error ? error.message : "Could not create the product" };
+  }
+}
+
+export async function groupProductsAction(_state: ActionState, formData: FormData): Promise<ActionState> {
+  try {
+    const childIds = formData
+      .getAll("childIds")
+      .map((value) => String(value).trim())
+      .filter(Boolean);
+    const id = await groupProducts(await userId(), String(formData.get("workspaceId")), {
+      name: String(formData.get("name") ?? ""),
+      description: String(formData.get("description") ?? ""),
+      childIds,
+    });
+    revalidateConsoleData([`/products/${id}`, ...childIds.map((childId) => `/products/${childId}`)]);
+    redirect(`/products/${id}`);
+  } catch (error) {
+    unstable_rethrow(error);
+    return { error: error instanceof Error ? error.message : "Could not group products" };
+  }
+}
+
+export async function attachProductsAsChildrenAction(
+  _state: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const parentId = String(formData.get("parentId") ?? "").trim();
+  try {
+    const childIds = formData
+      .getAll("childIds")
+      .map((value) => String(value).trim())
+      .filter(Boolean);
+    await attachProductsAsChildren(await userId(), String(formData.get("workspaceId")), parentId, childIds);
+    revalidateConsoleData([`/products/${parentId}`, ...childIds.map((childId) => `/products/${childId}`)]);
+    redirect(`/products/${parentId}`);
+  } catch (error) {
+    unstable_rethrow(error);
+    return { error: error instanceof Error ? error.message : "Could not add subproducts" };
   }
 }
 

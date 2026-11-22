@@ -104,6 +104,7 @@ export const workspaceInvitations = pgTable("workspace_invitations", {
 export const products = pgTable("products", {
   id: uuid("id").primaryKey().defaultRandom(),
   workspaceId: uuid("workspace_id").notNull(),
+  parentId: uuid("parent_id"),
   name: text("name").notNull(),
   description: text("description").notNull().default(""),
   status: text("status").$type<"active" | "archived">().notNull().default("active"),

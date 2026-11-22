@@ -13,11 +13,13 @@ function sqlProductProjectVisible(showMocks: boolean) {
 export type ProductRecord = {
   id: string;
   workspace_id: string;
+  parent_id: string | null;
   name: string;
   description: string;
   status: "active" | "archived";
   archived_at: Date | null;
   created_at: Date;
+  child_count: number;
   project_count: number;
   open_issues: number;
   in_progress_issues: number;
@@ -62,7 +64,10 @@ export type WorkspaceProductPortfolio = {
 };
 
 const PRODUCT_STATS_SELECT = sql`
-  p.id, p.workspace_id, p.name, p.description, p.status, p.archived_at, p.created_at,
+  p.id, p.workspace_id, p.parent_id, p.name, p.description, p.status, p.archived_at, p.created_at,
+  (
+    select count(*)::int from products child where child.parent_id = p.id
+  ) as child_count,
   count(distinct pr.id)::int as project_count,
   count(t.id) filter (where t.deleted_at is null)::int as total_issues,
   count(t.id) filter (
@@ -78,14 +83,39 @@ const PRODUCT_STATS_SELECT = sql`
   count(t.id) filter (where t.deleted_at is null and t.status = 'done')::int as done_issues
 `;
 
+const PRODUCT_GROUP_BY = sql`
+  p.id, p.workspace_id, p.parent_id, p.name, p.description, p.status, p.archived_at, p.created_at
+`;
+
 function withCompletion(rows: Array<Omit<ProductRecord, "completion"> & { completion?: number }>): ProductRecord[] {
   return rows.map((row) => {
     const active = row.open_issues + row.done_issues;
     return {
       ...row,
+      parent_id: row.parent_id ?? null,
+      child_count: Number(row.child_count ?? 0),
       completion: active === 0 ? 0 : Math.round((row.done_issues / active) * 100),
     };
   });
+}
+
+async function assertValidParent(
+  tx: Tx,
+  workspaceId: string,
+  parentId: string,
+  excludeProductId?: string,
+): Promise<void> {
+  const rows = await tx.execute<{ id: string; parent_id: string | null; status: string }>(sql`
+    select id, parent_id, status from products
+    where id = ${parentId}::uuid and workspace_id = ${workspaceId}::uuid
+  `);
+  const parent = rows[0];
+  if (!parent) throw new Error("Parent product not found");
+  if (parent.status !== "active") throw new Error("Parent product must be active");
+  if (parent.parent_id) throw new Error("Subproducts cannot have children (one nesting level only)");
+  if (excludeProductId && parent.id === excludeProductId) {
+    throw new Error("A product cannot be its own parent");
+  }
 }
 
 /** Resolve an explicit product id, or the workspace's General product. */
@@ -122,13 +152,20 @@ export async function resolveProductId(
 export async function listProducts(
   userId: string,
   workspaceId: string,
-  filter: { status?: "active" | "archived" | "all"; query?: string } = {},
+  filter: {
+    status?: "active" | "archived" | "all";
+    query?: string;
+    parentId?: string | null;
+    rootsOnly?: boolean;
+  } = {},
 ): Promise<ProductRecord[]> {
   const showMocks = await areDevMocksVisible();
   return withUser(userId, async (tx) => {
     await requireAction(tx, workspaceId, "task.read");
     const status = filter.status ?? "active";
     const query = filter.query?.trim() ?? "";
+    const parentId = filter.parentId;
+    const rootsOnly = Boolean(filter.rootsOnly);
     const rows = await tx.execute<Omit<ProductRecord, "completion">>(sql`
       select ${PRODUCT_STATS_SELECT}
       from products p
@@ -140,7 +177,18 @@ export async function listProducts(
           ${query} = ''
           or p.name ilike ${"%" + query + "%"}
         )
-      group by p.id, p.workspace_id, p.name, p.description, p.status, p.archived_at, p.created_at
+        and (
+          ${parentId === undefined}
+          or (
+            ${parentId === null} and p.parent_id is null
+          )
+          or p.parent_id = ${parentId ?? null}::uuid
+        )
+        and (
+          ${!rootsOnly}
+          or p.parent_id is null
+        )
+      group by ${PRODUCT_GROUP_BY}
       order by p.name
     `);
     return withCompletion(rows);
@@ -281,7 +329,7 @@ export async function listWorkspaceProductPortfolios(
             ${query} = ''
             or p.name ilike ${"%" + query + "%"}
           )
-        group by p.id, p.workspace_id, p.name, p.description, p.status, p.archived_at, p.created_at
+        group by ${PRODUCT_GROUP_BY}
         order by p.name
       `);
       const products = withCompletion(rows);
@@ -321,7 +369,7 @@ export async function getProduct(
       left join projects pr on pr.product_id = p.id and ${sqlProductProjectVisible(showMocks)}
       left join tasks t on t.project_id = pr.id and t.workspace_id = p.workspace_id
       where p.workspace_id = ${workspaceId}::uuid and p.id = ${productId}::uuid
-      group by p.id, p.workspace_id, p.name, p.description, p.status, p.archived_at, p.created_at
+      group by ${PRODUCT_GROUP_BY}
     `);
     return withCompletion(rows)[0] ?? null;
   });
@@ -330,16 +378,19 @@ export async function getProduct(
 export async function createProduct(
   userId: string,
   workspaceId: string,
-  input: { name: string; description?: string },
+  input: { name: string; description?: string; parentId?: string | null },
 ): Promise<string> {
   const name = input.name.trim();
   if (name.length < 2 || name.length > 120) throw new Error("Product name must be between 2 and 120 characters");
+  const parentId = input.parentId?.trim() || null;
   return withUser(userId, async (tx) => {
     await requireAction(tx, workspaceId, "project.create");
+    if (parentId) await assertValidParent(tx, workspaceId, parentId);
     const rows = await tx.execute<{ id: string }>(sql`
-      insert into products (workspace_id, name, description, created_by)
+      insert into products (workspace_id, parent_id, name, description, created_by)
       values (
         ${workspaceId}::uuid,
+        ${parentId}::uuid,
         ${name},
         ${input.description?.trim() ?? ""},
         current_setting('app.current_user_id', true)
@@ -353,8 +404,73 @@ export async function createProduct(
       action: "product.created",
       entityType: "product",
       entityId: id,
+      metadata: parentId ? { parentId } : {},
     });
     return id;
+  });
+}
+
+/** Create a parent product and attach existing root products as its subproducts. */
+export async function groupProducts(
+  userId: string,
+  workspaceId: string,
+  input: { name: string; description?: string; childIds: string[] },
+): Promise<string> {
+  const name = input.name.trim();
+  if (name.length < 2 || name.length > 120) throw new Error("Product name must be between 2 and 120 characters");
+  const childIds = [...new Set(input.childIds.map((id) => id.trim()).filter(Boolean))];
+  if (childIds.length < 2) throw new Error("Select at least two products to group");
+
+  return withUser(userId, async (tx) => {
+    await requireAction(tx, workspaceId, "project.create");
+    const children = await tx.execute<{ id: string; parent_id: string | null; name: string }>(sql`
+      select id, parent_id, name from products
+      where workspace_id = ${workspaceId}::uuid
+        and id = any(${childIds}::uuid[])
+        and status = 'active'
+    `);
+    if (children.length !== childIds.length) {
+      throw new Error("One or more selected products were not found");
+    }
+    if (children.some((child) => child.parent_id)) {
+      throw new Error("Only top-level products can be grouped");
+    }
+    const withKids = await tx.execute<{ id: string }>(sql`
+      select distinct parent_id as id from products
+      where parent_id = any(${childIds}::uuid[])
+    `);
+    if (withKids.length > 0) {
+      throw new Error("Products that already have subproducts cannot be grouped");
+    }
+
+    const created = await tx.execute<{ id: string }>(sql`
+      insert into products (workspace_id, name, description, created_by)
+      values (
+        ${workspaceId}::uuid,
+        ${name},
+        ${input.description?.trim() ?? ""},
+        current_setting('app.current_user_id', true)
+      )
+      returning id
+    `);
+    const parentId = created[0]?.id;
+    if (!parentId) throw new Error("Product was not created");
+
+    await tx.execute(sql`
+      update products
+      set parent_id = ${parentId}::uuid
+      where workspace_id = ${workspaceId}::uuid
+        and id = any(${childIds}::uuid[])
+    `);
+
+    await writeAudit(tx, {
+      workspaceId,
+      action: "product.grouped",
+      entityType: "product",
+      entityId: parentId,
+      metadata: { childIds },
+    });
+    return parentId;
   });
 }
 
@@ -387,6 +503,55 @@ export async function updateProduct(
   });
 }
 
+/** Attach existing root products as subproducts of an existing parent. */
+export async function attachProductsAsChildren(
+  userId: string,
+  workspaceId: string,
+  parentId: string,
+  childIds: string[],
+): Promise<void> {
+  const ids = [...new Set(childIds.map((id) => id.trim()).filter(Boolean))];
+  if (ids.length === 0) throw new Error("Select at least one product");
+  if (ids.includes(parentId)) throw new Error("A product cannot be its own parent");
+
+  await withUser(userId, async (tx) => {
+    await requireAction(tx, workspaceId, "project.update");
+    await assertValidParent(tx, workspaceId, parentId);
+    const children = await tx.execute<{ id: string; parent_id: string | null }>(sql`
+      select id, parent_id from products
+      where workspace_id = ${workspaceId}::uuid
+        and id = any(${ids}::uuid[])
+        and status = 'active'
+    `);
+    if (children.length !== ids.length) {
+      throw new Error("One or more selected products were not found");
+    }
+    if (children.some((child) => child.parent_id)) {
+      throw new Error("Only top-level products can become subproducts");
+    }
+    const withKids = await tx.execute<{ id: string }>(sql`
+      select distinct parent_id as id from products
+      where parent_id = any(${ids}::uuid[])
+    `);
+    if (withKids.length > 0) {
+      throw new Error("Products that already have subproducts cannot become subproducts");
+    }
+    await tx.execute(sql`
+      update products
+      set parent_id = ${parentId}::uuid
+      where workspace_id = ${workspaceId}::uuid
+        and id = any(${ids}::uuid[])
+    `);
+    await writeAudit(tx, {
+      workspaceId,
+      action: "product.children_attached",
+      entityType: "product",
+      entityId: parentId,
+      metadata: { childIds: ids },
+    });
+  });
+}
+
 export async function archiveProduct(
   userId: string,
   workspaceId: string,
@@ -402,6 +567,12 @@ export async function archiveProduct(
       `);
       if ((open[0]?.n ?? 0) > 0) {
         throw new Error("Archive or move active projects in this product first");
+      }
+      const children = await tx.execute<{ n: number }>(sql`
+        select count(*)::int as n from products where parent_id = ${productId}::uuid
+      `);
+      if ((children[0]?.n ?? 0) > 0) {
+        throw new Error("Move or delete subproducts first");
       }
     }
     const rows = await tx.execute(sql`

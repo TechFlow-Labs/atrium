@@ -11,8 +11,10 @@ import {
   ListTodo,
   Siren,
 } from "lucide-react";
-import { createProjectAction } from "@/app/actions";
+import { createProductAction, createProjectAction } from "@/app/actions";
+import { AttachSubproductsDialog } from "@/components/attach-subproducts-dialog";
 import { ProductEditDialog } from "@/components/product-edit-dialog";
+import { ProductForm } from "@/components/product-form";
 import { ProjectCard } from "@/components/project-card";
 import { ProjectStatCard } from "@/components/project-dashboard";
 import { ProjectForm } from "@/components/project-form";
@@ -22,7 +24,7 @@ import { getSessionUser } from "@/server/auth/session";
 import { workspaceContext } from "@/server/auth/workspace";
 import { listIntegrations } from "@/server/integrations/service";
 import { isTaskProvider } from "@/server/integrations/types";
-import { getProduct } from "@/server/products/service";
+import { getProduct, listProducts } from "@/server/products/service";
 import { enrichGithubBoardTitles } from "@/server/projects/panel";
 import { listProjects } from "@/server/projects/service";
 
@@ -57,9 +59,14 @@ async function ProductDetailContent({
   const product = await getProduct(user.id, current.id, productId);
   if (!product) notFound();
 
-  const [listedProjects, integrations] = await Promise.all([
+  const [listedProjects, integrations, siblingProducts, parent, children] = await Promise.all([
     listProjects(user.id, current.id, { status: "all", productId }),
     listIntegrations(user.id, current.id),
+    listProducts(user.id, current.id, { status: "active" }),
+    product.parent_id
+      ? getProduct(user.id, current.id, product.parent_id)
+      : Promise.resolve(null),
+    listProducts(user.id, current.id, { status: "all", parentId: product.id }),
   ]);
   const projects = await enrichGithubBoardTitles(user.id, current.id, listedProjects);
   const canWrite = current.role === "owner" || current.role === "admin";
@@ -75,17 +82,18 @@ async function ProductDetailContent({
       provider: integration.provider,
       displayName: integration.display_name,
     }));
-  const canDelete = canWrite && product.project_count === 0;
+  const canDelete = canWrite && product.project_count === 0 && product.child_count === 0;
+  const isRoot = !product.parent_id;
 
   return (
     <div className="space-y-8">
       <div>
         <Link
-          href="/products"
+          href={parent ? `/products/${parent.id}` : "/products"}
           className="inline-flex items-center gap-1.5 text-sm text-muted hover:text-foreground"
         >
           <ArrowLeft className="size-3.5" aria-hidden="true" />
-          Products
+          {parent ? parent.name : "Products"}
         </Link>
         <div className="mt-3 flex flex-wrap items-end justify-between gap-3">
           <div>
@@ -111,9 +119,30 @@ async function ProductDetailContent({
                   name: product.name,
                   description: product.description,
                   status: product.status,
+                  child_count: product.child_count,
+                  project_count: product.project_count,
                 }}
                 canDelete={canDelete}
               />
+            ) : null}
+            {canWrite && isRoot && product.status === "active" ? (
+              <>
+                <AttachSubproductsDialog
+                  workspaceId={current.id}
+                  parentId={product.id}
+                  products={siblingProducts}
+                />
+                <ProductForm
+                  workspaceId={current.id}
+                  action={createProductAction}
+                  parentId={product.id}
+                  triggerLabel="Add subproduct"
+                  title="New subproduct"
+                  description={`Create a subproduct under ${product.name}.`}
+                  submitLabel="Create subproduct"
+                  variant="outline"
+                />
+              </>
             ) : null}
             {canWrite && product.status === "active" ? (
               <ProjectForm
@@ -176,23 +205,72 @@ async function ProductDetailContent({
         />
       </section>
 
-      {projects.length === 0 ? (
-        <div className="rounded-xl border border-dashed px-6 py-12 text-center text-sm text-muted">
-          No projects in this product yet.
-        </div>
-      ) : (
-        <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-          {projects.map((project) => (
-            <ProjectCard
-              key={project.id}
-              workspaceId={current.id}
-              project={project}
-              canWrite={canWrite}
-            />
-          ))}
-        </ul>
-      )}
+      {isRoot ? (
+        <section className="space-y-3">
+          <div className="flex flex-wrap items-end justify-between gap-2">
+            <div>
+              <h2 className="text-xl font-medium">Subproducts</h2>
+              <p className="text-sm text-muted">
+                Nested products under {product.name}. Projects stay on each subproduct.
+              </p>
+            </div>
+          </div>
+          {children.length === 0 ? (
+            <div className="rounded-xl border border-dashed px-6 py-10 text-center text-sm text-muted">
+              No subproducts yet.
+            </div>
+          ) : (
+            <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+              {children.map((child) => (
+                <li key={child.id}>
+                  <Link
+                    href={`/products/${child.id}`}
+                    className="flex min-h-[9rem] flex-col rounded-xl border bg-card p-4 transition hover:-translate-y-0.5 hover:border-foreground/20 hover:shadow-[0_12px_28px_-18px_rgba(0,0,0,0.55)]"
+                  >
+                    <h3 className="text-base font-medium leading-snug">{child.name}</h3>
+                    {child.description ? (
+                      <p className="mt-2 line-clamp-2 text-sm text-muted">{child.description}</p>
+                    ) : null}
+                    <dl className="mt-auto grid grid-cols-2 gap-x-3 gap-y-2 pt-4 text-xs">
+                      <div>
+                        <dt className="text-muted">Projects</dt>
+                        <dd className="mt-0.5 tabular-nums font-medium">{child.project_count}</dd>
+                      </div>
+                      <div>
+                        <dt className="text-muted">Open issues</dt>
+                        <dd className="mt-0.5 tabular-nums font-medium">{child.open_issues}</dd>
+                      </div>
+                    </dl>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      ) : null}
 
+      <section className="space-y-3">
+        <div>
+          <h2 className="text-xl font-medium">Projects</h2>
+          <p className="text-sm text-muted">Projects owned by this product.</p>
+        </div>
+        {projects.length === 0 ? (
+          <div className="rounded-xl border border-dashed px-6 py-12 text-center text-sm text-muted">
+            No projects in this product yet.
+          </div>
+        ) : (
+          <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            {projects.map((project) => (
+              <ProjectCard
+                key={project.id}
+                workspaceId={current.id}
+                project={project}
+                canWrite={canWrite}
+              />
+            ))}
+          </ul>
+        )}
+      </section>
     </div>
   );
 }
