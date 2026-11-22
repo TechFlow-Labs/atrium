@@ -28,6 +28,8 @@ import type {
 
 type CreateProductAction = (state: ActionState, formData: FormData) => Promise<ActionState>;
 
+const PRODUCT_PROJECT_PREVIEW = 4;
+
 function ProductCard({
   product,
   href,
@@ -39,6 +41,10 @@ function ProductCard({
   onOpenOtherWorkspace?: () => void;
   nested?: boolean;
 }) {
+  const projectNames = product.project_names ?? [];
+  const visibleProjects = projectNames.slice(0, PRODUCT_PROJECT_PREVIEW);
+  const hiddenProjectCount = Math.max(0, projectNames.length - visibleProjects.length);
+
   const body = (
     <>
       <div className="flex items-start justify-between gap-2">
@@ -60,6 +66,27 @@ function ProductCard({
       </div>
       {product.description ? (
         <p className="mt-2 line-clamp-2 text-sm text-muted">{product.description}</p>
+      ) : null}
+      {visibleProjects.length > 0 ? (
+        <ul className="mt-2.5 space-y-0.5">
+          {visibleProjects.map((name) => (
+            <li
+              key={name}
+              className="flex items-center gap-1.5 truncate text-[11px] leading-snug text-muted"
+            >
+              <FolderKanban className="size-3 shrink-0 opacity-70" aria-hidden="true" />
+              <span className="truncate">{name}</span>
+            </li>
+          ))}
+          {hiddenProjectCount > 0 ? (
+            <li className="flex items-center gap-1.5 text-[11px] text-muted">
+              <span className="size-3 shrink-0" aria-hidden="true" />
+              +{hiddenProjectCount} more
+            </li>
+          ) : null}
+        </ul>
+      ) : !nested && product.child_count > 0 ? (
+        <p className="mt-2.5 text-[11px] text-muted">Projects live under subproducts</p>
       ) : null}
       <dl className="mt-auto grid grid-cols-2 gap-x-3 gap-y-2 pt-4 text-xs">
         <div>
