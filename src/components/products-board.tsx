@@ -6,6 +6,7 @@ import {
   AlertTriangle,
   Boxes,
   CheckCircle2,
+  ChevronRight,
   CircleDot,
   FolderKanban,
   Gauge,
@@ -79,32 +80,46 @@ function ProductCard({
 
   const projectList =
     visibleProjects.length > 0 ? (
-      <ul className="relative z-10 mt-2.5 space-y-0.5">
+      <ul className="relative z-10 mt-3 space-y-1.5">
         {visibleProjects.map((project) => {
-          const rowClass =
-            "flex min-w-0 items-center gap-1.5 truncate rounded-md px-1 py-0.5 text-[11px] leading-snug text-muted transition hover:bg-accent/50 hover:text-foreground";
+          const rowClass = cn(
+            "group/project flex min-w-0 items-center gap-2 rounded-md border border-border/80 bg-background/70 px-2 py-1.5",
+            "text-[11px] leading-snug text-foreground/85 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]",
+            canLinkProjects
+              && "transition hover:border-foreground/25 hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+          );
+          const content = (
+            <>
+              <FolderKanban
+                className="size-3.5 shrink-0 text-teal-600 dark:text-teal-400"
+                aria-hidden="true"
+              />
+              <span className="min-w-0 flex-1 truncate font-medium">{project.name}</span>
+              {canLinkProjects ? (
+                <ChevronRight
+                  className="size-3.5 shrink-0 text-muted opacity-70 transition group-hover/project:translate-x-0.5 group-hover/project:opacity-100"
+                  aria-hidden="true"
+                />
+              ) : null}
+            </>
+          );
           if (canLinkProjects) {
             return (
               <li key={project.id}>
                 <Link href={`/projects/${project.id}`} className={rowClass}>
-                  <FolderKanban className="size-3 shrink-0 opacity-70" aria-hidden="true" />
-                  <span className="truncate">{project.name}</span>
+                  {content}
                 </Link>
               </li>
             );
           }
           return (
-            <li key={project.id} className={cn(rowClass, "px-0")}>
-              <FolderKanban className="size-3 shrink-0 opacity-70" aria-hidden="true" />
-              <span className="truncate">{project.name}</span>
+            <li key={project.id} className={rowClass}>
+              {content}
             </li>
           );
         })}
         {hiddenProjectCount > 0 ? (
-          <li className="flex items-center gap-1.5 px-1 text-[11px] text-muted">
-            <span className="size-3 shrink-0" aria-hidden="true" />
-            +{hiddenProjectCount} more
-          </li>
+          <li className="px-2 text-[11px] text-muted">+{hiddenProjectCount} more</li>
         ) : null}
       </ul>
     ) : !nested && product.child_count > 0 ? (
