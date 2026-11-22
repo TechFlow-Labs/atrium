@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
-import { Boxes, Check, ChevronDown, CircleDashed, Layers, Search } from "lucide-react";
+import { Boxes, Check, ChevronDown, CircleDashed, Layers, Search, UserRound } from "lucide-react";
 import { ProviderIcon, providerLabel } from "@/components/provider-icon";
 import { PriorityIcon, StatusIcon } from "@/components/task-meta-icons";
 import {
@@ -26,6 +26,7 @@ export { buildTasksHref, parseFilterList, serializeFilterList };
 
 type ProjectOption = { id: string; name: string; productId?: string };
 type ProductOption = { id: string; name: string };
+type AssigneeOption = { value: string; label: string };
 
 type PickerOption = {
   value: string;
@@ -283,12 +284,14 @@ export function TaskSearch({
 export function TaskFilters({
   projects,
   products = [],
+  assignees = [],
   values,
   pending = false,
   onNavigate,
 }: {
   projects: ProjectOption[];
   products?: ProductOption[];
+  assignees?: AssigneeOption[];
   values: FilterValues;
   pending?: boolean;
   onNavigate: (href: string) => void;
@@ -298,6 +301,7 @@ export function TaskFilters({
   const selectedProducts = parseFilterList(values.product);
   const selectedProjects = parseFilterList(values.project);
   const sources = parseFilterList(values.source);
+  const selectedAssignees = parseFilterList(values.assignee);
 
   const productOptions: PickerOption[] = products.map((item) => ({
     value: item.id,
@@ -318,6 +322,19 @@ export function TaskFilters({
     icon: <CircleDashed className="size-4 text-teal-600" aria-hidden="true" />,
   }));
 
+  const assigneeOptions: PickerOption[] = [
+    {
+      value: "unassigned",
+      label: "Unassigned",
+      icon: <UserRound className="size-4 text-muted" aria-hidden="true" />,
+    },
+    ...assignees.map((item) => ({
+      value: item.value,
+      label: item.label,
+      icon: <UserRound className="size-4 text-sky-600" aria-hidden="true" />,
+    })),
+  ];
+
   function navigate(next: Partial<FilterValues>) {
     onNavigate(
       buildTasksHref({
@@ -327,6 +344,7 @@ export function TaskFilters({
         product: serializeFilterList(selectedProducts),
         project: serializeFilterList(selectedProjects),
         source: serializeFilterList(sources),
+        assignee: serializeFilterList(selectedAssignees),
         ...next,
       }),
     );
@@ -336,7 +354,7 @@ export function TaskFilters({
     <div
       data-drag-inert=""
       className={cn(
-        "grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6",
+        "grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-7",
         pending && "opacity-70",
       )}
       aria-busy={pending}
@@ -390,6 +408,14 @@ export function TaskFilters({
         values={selectedProjects.filter((id) => visibleProjects.some((project) => project.id === id))}
         options={projectOptions}
         onChange={(next) => navigate({ project: serializeFilterList(next) })}
+      />
+      <MultiFilterPicker
+        label="Assigned to"
+        emptyLabel="Any assignee"
+        noun="assignees"
+        values={selectedAssignees}
+        options={assigneeOptions}
+        onChange={(next) => navigate({ assignee: serializeFilterList(next) })}
       />
       <MultiFilterPicker
         label="Source"

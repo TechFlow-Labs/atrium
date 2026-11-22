@@ -5,6 +5,7 @@ export type FilterValues = {
   product?: string;
   project?: string;
   source?: string;
+  assignee?: string;
   view?: string;
   dueBefore?: string;
   dueAfter?: string;
@@ -28,6 +29,7 @@ export function filterValuesFromSearchParams(params: URLSearchParams): FilterVal
     product: params.get("product") ?? undefined,
     project: params.get("project") ?? undefined,
     source: params.get("source") ?? undefined,
+    assignee: params.get("assignee") ?? undefined,
     view: params.get("view") ?? undefined,
     dueBefore: params.get("dueBefore") ?? undefined,
     dueAfter: params.get("dueAfter") ?? undefined,
@@ -43,6 +45,7 @@ export function tasksDataQueryKey(values: FilterValues): string {
   if (values.product) params.set("product", values.product);
   if (values.project) params.set("project", values.project);
   if (values.source) params.set("source", values.source);
+  if (values.assignee) params.set("assignee", values.assignee);
   if (values.dueBefore) params.set("dueBefore", values.dueBefore);
   if (values.dueAfter) params.set("dueAfter", values.dueAfter);
   return params.toString();
@@ -57,6 +60,7 @@ export function buildTasksHref(values: FilterValues): string {
   if (values.product) params.set("product", values.product);
   if (values.project) params.set("project", values.project);
   if (values.source) params.set("source", values.source);
+  if (values.assignee) params.set("assignee", values.assignee);
   if (values.dueBefore) params.set("dueBefore", values.dueBefore);
   if (values.dueAfter) params.set("dueAfter", values.dueAfter);
   const query = params.toString();

@@ -12,6 +12,7 @@ export type TasksPanelFilter = {
   product?: string;
   project?: string;
   source?: string;
+  assignee?: string;
   q?: string;
   dueBefore?: string;
   dueAfter?: string;
@@ -75,6 +76,7 @@ export async function loadTasksPanel(
     productId: filter.product,
     projectId: filter.project,
     source: filter.source,
+    assignee: filter.assignee,
     query: filter.q,
     dueBefore: filter.dueBefore,
     dueAfter: filter.dueAfter,

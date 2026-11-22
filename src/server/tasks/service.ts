@@ -281,7 +281,6 @@ export async function listTasks(
   return withUser(userId, async (tx) => {
     await requireAction(tx, workspaceId, "task.read");
     const query = filter.query?.trim() ?? "";
-    const assignee = filter.assignee?.trim() ?? "";
     const dueBefore = filter.dueBefore?.trim() || null;
     const dueAfter = filter.dueAfter?.trim() || null;
     const statuses = parseFilterList(filter.status);
@@ -296,6 +295,9 @@ export async function listTasks(
     const projectIds = parseFilterList(filter.projectId);
     const productIds = parseFilterList(filter.productId);
     const sources = parseFilterList(filter.source);
+    const assigneeKeys = parseFilterList(filter.assignee);
+    const wantUnassigned = assigneeKeys.includes("unassigned");
+    const assigneeMatches = assigneeKeys.filter((key) => key !== "unassigned");
     const wantAtrium = sources.some((source) => source === "atrium" || source === "native");
     const providerSources = sources.filter((source) => TASK_PROVIDER_SOURCES.has(source));
     const statusFilter = textArray(statuses);
@@ -303,6 +305,8 @@ export async function listTasks(
     const projectFilter = textArray(projectIds);
     const productFilter = textArray(productIds);
     const providerFilter = textArray(providerSources);
+    const assigneeFilter = textArray(assigneeMatches);
+    const assigneeFilterLower = textArray(assigneeMatches.map((key) => key.toLowerCase()));
     const rows = await tx.execute<TaskRow>(sql`
       select ${TASK_PROJECT_SELECT}
       from tasks t
@@ -328,7 +332,25 @@ export async function listTasks(
           cardinality(${priorityFilter}) = 0
           or t.priority = any(${priorityFilter})
         )
-        and (${assignee} = '' or t.assignee_user_id = ${assignee})
+        and (
+          ${assigneeKeys.length === 0}
+          or (
+            (
+              ${wantUnassigned}
+              and t.assignee_user_id is null
+              and nullif(t.assignee_provider_id, '') is null
+              and nullif(t.assignee_label, '') is null
+            )
+            or (
+              cardinality(${assigneeFilter}) > 0
+              and (
+                t.assignee_user_id = any(${assigneeFilter})
+                or t.assignee_provider_id = any(${assigneeFilter})
+                or lower(coalesce(t.assignee_label, '')) = any(${assigneeFilterLower})
+              )
+            )
+          )
+        )
         and (${query} = '' or t.title ilike ${"%" + query + "%"} or t.description ilike ${"%" + query + "%"})
         and (${dueBefore}::timestamptz is null or t.due_at <= ${dueBefore}::timestamptz)
         and (${dueAfter}::timestamptz is null or t.due_at >= ${dueAfter}::timestamptz)
@@ -350,6 +372,48 @@ export async function listTasks(
       limit 300
     `);
     return rows.map(toTaskRecord);
+  });
+}
+
+export type TaskAssigneeOption = {
+  value: string;
+  label: string;
+};
+
+/** Distinct assignees for the Issues filter (workspace users + provider labels). */
+export async function listTaskAssignees(
+  userId: string,
+  workspaceId: string,
+): Promise<TaskAssigneeOption[]> {
+  const showMocks = await areDevMocksVisible();
+  return withUser(userId, async (tx) => {
+    await requireAction(tx, workspaceId, "task.read");
+    const rows = await tx.execute<{ value: string; label: string }>(sql`
+      select distinct on (lower(value))
+        value,
+        label
+      from (
+        select
+          coalesce(nullif(t.assignee_user_id, ''), nullif(t.assignee_provider_id, ''), nullif(t.assignee_label, '')) as value,
+          coalesce(nullif(u.name, ''), nullif(t.assignee_label, ''), nullif(t.assignee_provider_id, '')) as label
+        from tasks t
+        join projects p on p.id = t.project_id
+        left join "user" u on u.id = t.assignee_user_id
+        where t.workspace_id = ${workspaceId}::uuid
+          and t.deleted_at is null
+          and ${sqlDevMockProjectVisible(showMocks)}
+          and (
+            nullif(t.assignee_user_id, '') is not null
+            or nullif(t.assignee_provider_id, '') is not null
+            or nullif(t.assignee_label, '') is not null
+          )
+      ) assignees
+      where value is not null and label is not null
+      order by lower(value), label
+    `);
+    return rows
+      .map((row) => ({ value: row.value, label: row.label }))
+      .sort((a, b) => a.label.localeCompare(b.label));
   });
 }
 

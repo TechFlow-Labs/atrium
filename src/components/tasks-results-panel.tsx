@@ -47,6 +47,7 @@ export function TasksResultsPanel({
       product: values.product,
       project: values.project,
       source: values.source,
+      assignee: values.assignee,
       q: values.q,
       dueBefore: values.dueBefore,
       dueAfter: values.dueAfter,

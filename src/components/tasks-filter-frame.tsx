@@ -13,6 +13,7 @@ import {
 
 type ProjectOption = { id: string; name: string; productId?: string };
 type ProductOption = { id: string; name: string };
+type AssigneeOption = { value: string; label: string };
 
 function valuesFromHref(href: string): FilterValues {
   const url = new URL(href, typeof window === "undefined" ? "http://localhost" : window.location.origin);
@@ -23,6 +24,7 @@ export function TasksFilterFrame({
   workspaceId,
   projects,
   products = [],
+  assignees = [],
   heading,
   actions,
   canWrite = false,
@@ -33,6 +35,7 @@ export function TasksFilterFrame({
   workspaceId: string;
   projects: ProjectOption[];
   products?: ProductOption[];
+  assignees?: AssigneeOption[];
   heading: ReactNode;
   actions?: ReactNode;
   canWrite?: boolean;
@@ -82,6 +85,7 @@ export function TasksFilterFrame({
           <TaskFilters
             projects={projects}
             products={products}
+            assignees={assignees}
             values={values}
             onNavigate={onNavigate}
           />

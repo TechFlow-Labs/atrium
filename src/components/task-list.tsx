@@ -363,7 +363,10 @@ function TaskListRow({
                 ) : null}
               </>
             )}
-            <Badge tone={task.assigneeLabel ? "due" : "none"}>
+            <Badge
+              tone={task.assigneeLabel ? "due" : "none"}
+              className={task.assigneeLabel ? "normal-case" : undefined}
+            >
               {task.assigneeLabel || "Unassigned"}
             </Badge>
           </div>

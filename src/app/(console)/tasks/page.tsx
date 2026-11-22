@@ -15,6 +15,7 @@ import { isTaskProvider } from "@/server/integrations/types";
 import { listProducts } from "@/server/products/service";
 import { listProjects } from "@/server/projects/service";
 import { loadTasksPanel } from "@/server/tasks/panel";
+import { listTaskAssignees } from "@/server/tasks/service";
 import { projectDisplayName } from "@/lib/project-display";
 import { tasksDataQueryKey, type FilterValues } from "@/lib/task-filters";
 
@@ -26,6 +27,7 @@ type TasksSearchParams = {
   product?: string;
   project?: string;
   source?: string;
+  assignee?: string;
   q?: string;
   view?: string;
   dueBefore?: string;
@@ -57,9 +59,10 @@ async function TasksContent({
   const params = await searchParams;
   const { current } = await workspaceContext(user.id);
 
-  const [projects, products, integrations, panel] = await Promise.all([
+  const [projects, products, assignees, integrations, panel] = await Promise.all([
     listProjects(user.id, current.id, { status: "active" }),
     listProducts(user.id, current.id, { status: "active" }),
+    listTaskAssignees(user.id, current.id),
     listIntegrations(user.id, current.id),
     loadTasksPanel(user.id, current.id, current.role, {
       status: params.status,
@@ -67,6 +70,7 @@ async function TasksContent({
       product: params.product,
       project: params.project,
       source: params.source,
+      assignee: params.assignee,
       q: params.q,
       dueBefore: params.dueBefore,
       dueAfter: params.dueAfter,
@@ -103,6 +107,7 @@ async function TasksContent({
     product: params.product,
     project: params.project,
     source: params.source,
+    assignee: params.assignee,
     q: params.q,
     view: params.view,
     dueBefore: params.dueBefore,
@@ -117,6 +122,7 @@ async function TasksContent({
           workspaceId={current.id}
           projects={projectOptions}
           products={productOptions}
+          assignees={assignees}
           canWrite={canWrite}
           groupRelatedTasks={panel.groupRelatedTasks}
           initialValues={initialValues}
