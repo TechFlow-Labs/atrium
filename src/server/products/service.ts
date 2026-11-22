@@ -21,8 +21,8 @@ export type ProductRecord = {
   created_at: Date;
   child_count: number;
   project_count: number;
-  /** Display names of projects owned by this product (direct). */
-  project_names: string[];
+  /** Projects owned by this product (direct), for compact card links. */
+  projects: Array<{ id: string; name: string }>;
   open_issues: number;
   in_progress_issues: number;
   attention_issues: number;
@@ -76,31 +76,36 @@ function productStatsSelect(showMocks: boolean) {
     ) as child_count,
     count(distinct pr.id)::int as project_count,
     (
-      select coalesce(array_agg(label order by lower(label)), '{}'::text[])
+      select coalesce(
+        json_agg(json_build_object('id', named.id, 'name', named.label) order by lower(named.label)),
+        '[]'::json
+      )
       from (
-        select distinct coalesce(
-          nullif(btrim(prx.nickname), ''),
-          nullif(cx.field_mappings->>'githubProjectTitle', ''),
-          case
-            when ix.provider = 'github'
-              and nullif(coalesce(cx.provider_project_id, cx.provider_project_name), '') is not null
-              and prx.name = coalesce(cx.provider_project_id, cx.provider_project_name)
-            then nullif(
-              split_part(coalesce(cx.provider_project_id, cx.provider_project_name), '/', 2),
-              ''
-            )
-            else null
-          end,
-          prx.name
-        ) as label
+        select
+          prx.id,
+          coalesce(
+            nullif(btrim(prx.nickname), ''),
+            nullif(cx.field_mappings->>'githubProjectTitle', ''),
+            case
+              when ix.provider = 'github'
+                and nullif(coalesce(cx.provider_project_id, cx.provider_project_name), '') is not null
+                and prx.name = coalesce(cx.provider_project_id, cx.provider_project_name)
+              then nullif(
+                split_part(coalesce(cx.provider_project_id, cx.provider_project_name), '/', 2),
+                ''
+              )
+              else null
+            end,
+            prx.name
+          ) as label
         from projects prx
         left join project_connections cx on cx.project_id = prx.id
         left join integrations ix on ix.id = cx.integration_id
         where prx.product_id = p.id
           and ${projectVisible}
       ) named
-      where label is not null and label <> ''
-    ) as project_names,
+      where named.label is not null and named.label <> ''
+    ) as projects,
     count(t.id) filter (where t.deleted_at is null)::int as total_issues,
     count(t.id) filter (
       where t.deleted_at is null and t.status in ('open', 'in_progress', 'blocked')
@@ -120,11 +125,28 @@ const PRODUCT_GROUP_BY = sql`
   p.id, p.workspace_id, p.parent_id, p.name, p.description, p.status, p.archived_at, p.created_at
 `;
 
-function normalizeProjectNames(value: unknown): string[] {
-  if (!Array.isArray(value)) return [];
-  return value
-    .map((item) => (typeof item === "string" ? item.trim() : ""))
-    .filter(Boolean);
+function normalizeProductProjects(value: unknown): Array<{ id: string; name: string }> {
+  let rows = value;
+  if (typeof rows === "string") {
+    try {
+      rows = JSON.parse(rows);
+    } catch {
+      return [];
+    }
+  }
+  if (!Array.isArray(rows)) return [];
+  const seen = new Set<string>();
+  const projects: Array<{ id: string; name: string }> = [];
+  for (const item of rows) {
+    if (!item || typeof item !== "object") continue;
+    const row = item as { id?: unknown; name?: unknown };
+    const id = typeof row.id === "string" ? row.id.trim() : "";
+    const name = typeof row.name === "string" ? row.name.trim() : "";
+    if (!id || !name || seen.has(id)) continue;
+    seen.add(id);
+    projects.push({ id, name });
+  }
+  return projects;
 }
 
 function withCompletion(rows: Array<Omit<ProductRecord, "completion"> & { completion?: number }>): ProductRecord[] {
@@ -134,7 +156,7 @@ function withCompletion(rows: Array<Omit<ProductRecord, "completion"> & { comple
       ...row,
       parent_id: row.parent_id ?? null,
       child_count: Number(row.child_count ?? 0),
-      project_names: normalizeProjectNames(row.project_names),
+      projects: normalizeProductProjects(row.projects),
       completion: active === 0 ? 0 : Math.round((row.done_issues / active) * 100),
     };
   });

@@ -41,92 +41,122 @@ function ProductCard({
   onOpenOtherWorkspace?: () => void;
   nested?: boolean;
 }) {
-  const projectNames = product.project_names ?? [];
-  const visibleProjects = projectNames.slice(0, PRODUCT_PROJECT_PREVIEW);
-  const hiddenProjectCount = Math.max(0, projectNames.length - visibleProjects.length);
-
-  const body = (
-    <>
-      <div className="flex items-start justify-between gap-2">
-        <h2 className={cn("font-medium leading-snug", nested ? "text-base" : "text-lg")}>
-          {product.name}
-        </h2>
-        <div className="flex shrink-0 flex-wrap items-center justify-end gap-1">
-          {!nested && product.child_count > 0 ? (
-            <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">
-              {product.child_count} {product.child_count === 1 ? "subproduct" : "subproducts"}
-            </span>
-          ) : null}
-          {product.status === "archived" ? (
-            <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">
-              Archived
-            </span>
-          ) : null}
-        </div>
-      </div>
-      {product.description ? (
-        <p className="mt-2 line-clamp-2 text-sm text-muted">{product.description}</p>
-      ) : null}
-      {visibleProjects.length > 0 ? (
-        <ul className="mt-2.5 space-y-0.5">
-          {visibleProjects.map((name) => (
-            <li
-              key={name}
-              className="flex items-center gap-1.5 truncate text-[11px] leading-snug text-muted"
-            >
-              <FolderKanban className="size-3 shrink-0 opacity-70" aria-hidden="true" />
-              <span className="truncate">{name}</span>
-            </li>
-          ))}
-          {hiddenProjectCount > 0 ? (
-            <li className="flex items-center gap-1.5 text-[11px] text-muted">
-              <span className="size-3 shrink-0" aria-hidden="true" />
-              +{hiddenProjectCount} more
-            </li>
-          ) : null}
-        </ul>
-      ) : !nested && product.child_count > 0 ? (
-        <p className="mt-2.5 text-[11px] text-muted">Projects live under subproducts</p>
-      ) : null}
-      <dl className="mt-auto grid grid-cols-2 gap-x-3 gap-y-2 pt-4 text-xs">
-        <div>
-          <dt className="text-muted">Projects</dt>
-          <dd className="mt-0.5 tabular-nums font-medium">{product.project_count}</dd>
-        </div>
-        <div>
-          <dt className="text-muted">Open issues</dt>
-          <dd className="mt-0.5 tabular-nums font-medium">{product.open_issues}</dd>
-        </div>
-        <div>
-          <dt className="text-muted">Needs attention</dt>
-          <dd className="mt-0.5 tabular-nums font-medium">{product.attention_issues}</dd>
-        </div>
-        <div>
-          <dt className="text-muted">Completion</dt>
-          <dd className="mt-0.5 tabular-nums font-medium">{product.completion}%</dd>
-        </div>
-      </dl>
-    </>
-  );
+  const productHref = href ?? `/products/${product.id}`;
+  const productProjects = product.projects ?? [];
+  const visibleProjects = productProjects.slice(0, PRODUCT_PROJECT_PREVIEW);
+  const hiddenProjectCount = Math.max(0, productProjects.length - visibleProjects.length);
+  const canLinkProjects = !onOpenOtherWorkspace;
 
   const className = cn(
-    "flex flex-col rounded-xl border bg-card p-4 text-left transition",
+    "relative flex flex-col rounded-xl border bg-card p-4 text-left transition",
     nested ? "min-h-[9rem]" : "min-h-[11rem]",
     "hover:-translate-y-0.5 hover:border-foreground/20 hover:shadow-[0_12px_28px_-18px_rgba(0,0,0,0.55)]",
+  );
+
+  const header = (
+    <div className="flex items-start justify-between gap-2">
+      <h2 className={cn("font-medium leading-snug", nested ? "text-base" : "text-lg")}>
+        {product.name}
+      </h2>
+      <div className="flex shrink-0 flex-wrap items-center justify-end gap-1">
+        {!nested && product.child_count > 0 ? (
+          <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">
+            {product.child_count} {product.child_count === 1 ? "subproduct" : "subproducts"}
+          </span>
+        ) : null}
+        {product.status === "archived" ? (
+          <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">
+            Archived
+          </span>
+        ) : null}
+      </div>
+    </div>
+  );
+
+  const description = product.description ? (
+    <p className="mt-2 line-clamp-2 text-sm text-muted">{product.description}</p>
+  ) : null;
+
+  const projectList =
+    visibleProjects.length > 0 ? (
+      <ul className="relative z-10 mt-2.5 space-y-0.5">
+        {visibleProjects.map((project) => {
+          const rowClass =
+            "flex min-w-0 items-center gap-1.5 truncate rounded-md px-1 py-0.5 text-[11px] leading-snug text-muted transition hover:bg-accent/50 hover:text-foreground";
+          if (canLinkProjects) {
+            return (
+              <li key={project.id}>
+                <Link href={`/projects/${project.id}`} className={rowClass}>
+                  <FolderKanban className="size-3 shrink-0 opacity-70" aria-hidden="true" />
+                  <span className="truncate">{project.name}</span>
+                </Link>
+              </li>
+            );
+          }
+          return (
+            <li key={project.id} className={cn(rowClass, "px-0")}>
+              <FolderKanban className="size-3 shrink-0 opacity-70" aria-hidden="true" />
+              <span className="truncate">{project.name}</span>
+            </li>
+          );
+        })}
+        {hiddenProjectCount > 0 ? (
+          <li className="flex items-center gap-1.5 px-1 text-[11px] text-muted">
+            <span className="size-3 shrink-0" aria-hidden="true" />
+            +{hiddenProjectCount} more
+          </li>
+        ) : null}
+      </ul>
+    ) : !nested && product.child_count > 0 ? (
+      <p className="mt-2.5 text-[11px] text-muted">Projects live under subproducts</p>
+    ) : null;
+
+  const stats = (
+    <dl className="mt-auto grid grid-cols-2 gap-x-3 gap-y-2 pt-4 text-xs">
+      <div>
+        <dt className="text-muted">Projects</dt>
+        <dd className="mt-0.5 tabular-nums font-medium">{product.project_count}</dd>
+      </div>
+      <div>
+        <dt className="text-muted">Open issues</dt>
+        <dd className="mt-0.5 tabular-nums font-medium">{product.open_issues}</dd>
+      </div>
+      <div>
+        <dt className="text-muted">Needs attention</dt>
+        <dd className="mt-0.5 tabular-nums font-medium">{product.attention_issues}</dd>
+      </div>
+      <div>
+        <dt className="text-muted">Completion</dt>
+        <dd className="mt-0.5 tabular-nums font-medium">{product.completion}%</dd>
+      </div>
+    </dl>
   );
 
   if (onOpenOtherWorkspace) {
     return (
       <button type="button" onClick={onOpenOtherWorkspace} className={cn(className, "w-full")}>
-        {body}
+        {header}
+        {description}
+        {projectList}
+        {stats}
       </button>
     );
   }
 
   return (
-    <Link href={href ?? `/products/${product.id}`} className={className}>
-      {body}
-    </Link>
+    <div className={className}>
+      <Link
+        href={productHref}
+        className="absolute inset-0 z-0 rounded-xl"
+        aria-label={`Open product ${product.name}`}
+      />
+      <div className="relative z-10 pointer-events-none">
+        <div className="pointer-events-none">{header}</div>
+        {description}
+      </div>
+      {projectList}
+      <div className="relative z-0 pointer-events-none mt-auto">{stats}</div>
+    </div>
   );
 }
 
