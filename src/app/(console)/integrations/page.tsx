@@ -3,7 +3,6 @@ import { ScreenLoader } from "@/components/screen-loader";
 import { connection } from "next/server";
 import { redirect } from "next/navigation";
 import { IntegrationsOnboarding } from "@/components/integrations-onboarding";
-import { OAuthAppsPanel } from "@/components/oauth-apps-panel";
 import { McpPanel } from "@/components/mcp-panel";
 import { getSessionUser } from "@/server/auth/session";
 import { workspaceContext } from "@/server/auth/workspace";
@@ -39,18 +38,11 @@ async function IntegrationsContent({
     listMcpTokens(user.id),
   ]);
   const canAdmin = current.role === "owner" || current.role === "admin";
-  const { providers, oauth, overview, githubApp } = await providerCatalog(user.id, current.id);
+  const { providers, oauth, githubApp } = await providerCatalog(user.id, current.id);
   const callbackBase = (process.env.BETTER_AUTH_URL ?? "").replace(/\/$/, "");
   const params = await searchParams;
   return (
     <div className="space-y-10">
-      <OAuthAppsPanel
-        workspaceId={current.id}
-        canAdmin={canAdmin}
-        callbackBase={callbackBase}
-        overview={overview}
-        githubApp={githubApp}
-      />
       <div data-tour="integrations-providers">
         <IntegrationsOnboarding
           callbackBase={callbackBase}
