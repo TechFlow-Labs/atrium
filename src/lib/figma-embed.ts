@@ -45,6 +45,15 @@ export function figmaPinOverlayPoint(
   return { x, y };
 }
 
+/** Center of the area where Figma draws the fitted frame, under the embed chrome. */
+export function figmaEmbedCanvasCenter(viewport: { width: number; height: number }): { x: number; y: number } {
+  const height = Math.max(0, viewport.height - EMBED_CHROME.top - EMBED_CHROME.bottom);
+  return {
+    x: viewport.width / 2,
+    y: EMBED_CHROME.top + height / 2,
+  };
+}
+
 export function figmaCommentNodeId(meta: unknown): string | null {
   if (!meta || typeof meta !== "object") return null;
   const nodeId = (meta as { node_id?: unknown }).node_id;

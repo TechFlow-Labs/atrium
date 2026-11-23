@@ -232,7 +232,10 @@ async function withCommentPins(
   }
   return comments.map((comment) => {
     if (!comment.nodeId || !comment.offset) return comment;
-    const size = sizes.get(comment.nodeId);
+    const size =
+      sizes.get(comment.nodeId) ??
+      sizes.get(comment.nodeId.replace(/-/g, ":")) ??
+      sizes.get(comment.nodeId.replace(/:/g, "-"));
     if (!size) return comment;
     return {
       ...comment,

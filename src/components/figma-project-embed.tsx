@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { ExternalLink } from "lucide-react";
 import { ProviderIcon } from "@/components/provider-icon";
 import { Button } from "@/components/ui/button";
-import { figmaPinOverlayPoint, type FigmaCommentPin } from "@/lib/figma-embed";
+import { figmaEmbedCanvasCenter, figmaPinOverlayPoint, type FigmaCommentPin } from "@/lib/figma-embed";
 
 export function FigmaProjectEmbed({
   fileName,
@@ -28,29 +28,28 @@ export function FigmaProjectEmbed({
   const [point, setPoint] = useState<{ x: number; y: number } | null>(null);
 
   useEffect(() => {
-    if (loadedUrl === embedUrl && !pin) {
-      freshLoad.current = false;
+    freshLoad.current = true;
+    const backup = window.setTimeout(() => {
+      setLoadedUrl((current) => (current === embedUrl ? current : embedUrl));
+    }, 1600);
+    return () => window.clearTimeout(backup);
+  }, [embedUrl]);
+
+  useEffect(() => {
+    if (!pulseKey || loadedUrl !== embedUrl) {
       setPoint(null);
       return;
     }
-    if (!pin || loadedUrl !== embedUrl) {
-      setPoint(null);
-      return;
-    }
-    const wait = freshLoad.current ? 700 : 200;
+    const wait = freshLoad.current ? 700 : 180;
     freshLoad.current = false;
-    let shown = false;
     const reveal = window.setTimeout(() => {
       const rect = frameRef.current?.getBoundingClientRect();
-      if (!rect) return;
-      const next = figmaPinOverlayPoint(pin, { width: rect.width, height: rect.height });
-      if (!next) return;
-      shown = true;
-      setPoint(next);
+      if (!rect || rect.width <= 0 || rect.height <= 0) return;
+      const viewport = { width: rect.width, height: rect.height };
+      const next = pin ? figmaPinOverlayPoint(pin, viewport) : null;
+      setPoint(next ?? figmaEmbedCanvasCenter(viewport));
     }, wait);
-    const hide = window.setTimeout(() => {
-      if (shown) setPoint(null);
-    }, wait + 1500);
+    const hide = window.setTimeout(() => setPoint(null), wait + 1600);
     return () => {
       window.clearTimeout(reveal);
       window.clearTimeout(hide);
@@ -71,29 +70,26 @@ export function FigmaProjectEmbed({
           </a>
         </Button>
       </div>
-      <div ref={frameRef} className="relative overflow-hidden rounded-xl border bg-card">
+      <div ref={frameRef} className="relative isolate overflow-hidden rounded-xl border bg-card">
         <iframe
           key={focusKey}
           title={`${title} — Figma`}
           src={embedUrl}
-          className="h-[min(70vh,36rem)] w-full border-0"
+          className="relative z-0 h-[min(70vh,36rem)] w-full border-0"
           allowFullScreen
           onLoad={() => {
             freshLoad.current = true;
             setLoadedUrl(embedUrl);
           }}
         />
-        {point ? (
-          <span
-            key={pulseKey}
-            className="pointer-events-none absolute z-10 size-0"
-            style={{ left: point.x, top: point.y }}
-            aria-hidden="true"
-          >
-            <span className="figma-pin-ring" />
-            <span className="figma-pin-dot" />
-          </span>
-        ) : null}
+        <div className="pointer-events-none absolute inset-0 z-20">
+          {point ? (
+            <span key={pulseKey} className="absolute size-0" style={{ left: point.x, top: point.y }} aria-hidden="true">
+              <span className="figma-pin-ring" />
+              <span className="figma-pin-dot" />
+            </span>
+          ) : null}
+        </div>
       </div>
     </section>
   );
