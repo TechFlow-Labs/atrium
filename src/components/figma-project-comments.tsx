@@ -1,9 +1,8 @@
 "use client";
 
 import { useActionState, useState } from "react";
-import { ArrowUp, ExternalLink } from "lucide-react";
+import { ArrowUp, ChevronDown, ExternalLink } from "lucide-react";
 import { addFigmaCommentAction, type ActionState } from "@/app/actions";
-import { ProviderIcon } from "@/components/provider-icon";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/field";
 import { cn, formatRelativeWhen, initialsFromName } from "@/lib/utils";
@@ -71,15 +70,13 @@ export function FigmaProjectComments({
   const composerName = currentUserName?.trim() || "You";
 
   return (
-    <section className="flex min-h-0 flex-col gap-4" data-tour="project-figma-comments">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="text-base font-semibold tracking-tight">Design comments</h2>
-        <div className="flex items-center gap-1.5 text-xs text-muted">
-          <ProviderIcon provider="figma" className="size-3.5" />
-          <span>Figma</span>
-        </div>
-      </div>
-
+    <details className="group rounded-lg border bg-card" data-tour="project-figma-comments">
+      <summary className="flex cursor-pointer list-none items-center gap-2 px-4 py-3 font-medium marker:content-none [&::-webkit-details-marker]:hidden">
+        <span>Design comments</span>
+        <span className="text-xs font-normal text-muted">{threads.length}</span>
+        <ChevronDown className="ml-auto size-4 shrink-0 text-muted transition-transform group-open:rotate-180" aria-hidden="true" />
+      </summary>
+      <div className="flex min-h-0 flex-col gap-4 border-t px-4 py-4">
       {unavailableReason ? (
         <p className="rounded-lg border bg-card px-4 py-3 text-sm text-muted">{unavailableReason}</p>
       ) : null}
@@ -196,7 +193,8 @@ export function FigmaProjectComments({
       {!canWrite ? (
         <p className="text-sm text-muted">Your role can view design comments. Members and above can post.</p>
       ) : null}
-    </section>
+      </div>
+    </details>
   );
 }
 
