@@ -12,9 +12,9 @@ import { seedFakeProject } from "./fake";
 import { normalizeLinearToken } from "./linear";
 import { getAdapter, OAUTH_SCOPES } from "./registry";
 import { validateObsidianConnection } from "./obsidian";
-import { validateSlackConnection } from "./slack";
+import { exchangeSlackCode, SLACK_BOT_SCOPES, validateSlackConnection } from "./slack";
 import { ensureFreshCredentials } from "./token-refresh";
-import { isOAuthProvider } from "@/lib/oauth-providers";
+import { isOAuthProvider, type OAuthProvider } from "@/lib/oauth-providers";
 import type {
   FieldMappings,
   IntegrationProviderId,
@@ -165,7 +165,7 @@ export async function connectWithToken(
     let scopes: ReturnType<typeof textArray>;
     if (isChatProvider(provider)) {
       validated = await validateSlackConnection(token);
-      scopes = textArray(["channels:history", "channels:read", "groups:history", "groups:read", "users:read"]);
+      scopes = textArray([...SLACK_BOT_SCOPES]);
     } else if (isNoteProvider(provider)) {
       validated = await validateObsidianConnection(token, credential.siteUrl);
       scopes = textArray(["vault:read"]);
@@ -877,13 +877,13 @@ export async function addFakeRemoteProject(
   });
 }
 
-export function oauthRedirectUri(provider: Exclude<ProviderId, "fake">): string {
+export function oauthRedirectUri(provider: OAuthProvider): string {
   const base = (process.env.BETTER_AUTH_URL ?? "").replace(/\/$/, "");
   if (!base) throw new Error("BETTER_AUTH_URL is not set");
   return `${base}/api/integrations/oauth/${provider}/callback`;
 }
 
-export async function beginOAuth(userId: string, workspaceId: string, provider: Exclude<ProviderId, "fake">): Promise<string> {
+export async function beginOAuth(userId: string, workspaceId: string, provider: OAuthProvider): Promise<string> {
   const verifier = randomBytes(32).toString("base64url");
   const challenge = createHash("sha256").update(verifier).digest("base64url");
   const state = randomBytes(24).toString("base64url");
@@ -963,10 +963,18 @@ export async function beginOAuth(userId: string, workspaceId: string, provider: 
     url.searchParams.set("code_challenge_method", "S256");
     return url.toString();
   }
+  if (provider === "slack") {
+    const url = new URL("https://slack.com/oauth/v2/authorize");
+    url.searchParams.set("client_id", clientId);
+    url.searchParams.set("scope", SLACK_BOT_SCOPES.join(","));
+    url.searchParams.set("redirect_uri", redirectUri);
+    url.searchParams.set("state", state);
+    return url.toString();
+  }
   throw new Error(`OAuth is not supported for ${provider}`);
 }
 
-export async function completeOAuth(userId: string, provider: Exclude<ProviderId, "fake">, code: string, state: string) {
+export async function completeOAuth(userId: string, provider: OAuthProvider, code: string, state: string) {
   const redirectUri = oauthRedirectUri(provider);
   return withUser(userId, async (tx) => {
     const states = await tx.execute<{
@@ -1002,7 +1010,7 @@ export async function completeOAuth(userId: string, provider: Exclude<ProviderId
 }
 
 async function exchangeCode(
-  provider: Exclude<ProviderId, "fake">,
+  provider: OAuthProvider,
   input: { code: string; redirectUri: string; clientId: string; clientSecret: string; siteUrl: string | null; verifier: string },
 ): Promise<StoredCredential> {
   if (provider === "github") {
@@ -1096,6 +1104,14 @@ async function exchangeCode(
       siteUrl: site,
     };
   }
+  if (provider === "slack") {
+    return exchangeSlackCode({
+      code: input.code,
+      redirectUri: input.redirectUri,
+      clientId: input.clientId,
+      clientSecret: input.clientSecret,
+    });
+  }
   if (provider !== "jira") {
     throw new Error(`OAuth token exchange is not supported for ${provider}`);
   }
@@ -1132,16 +1148,19 @@ async function exchangeCode(
 async function connectInside(
   tx: Tx,
   workspaceId: string,
-  provider: Exclude<ProviderId, "fake">,
+  provider: OAuthProvider,
   credential: StoredCredential,
 ): Promise<string> {
-  const adapter = getAdapter(provider);
-  const validated = await adapter.validateConnection({
-    tx,
-    integrationId: "00000000-0000-4000-8000-000000000000",
-    credentials: credential,
-    mappings: adapter.defaultMappings(),
-  });
+  const validated =
+    provider === "slack"
+      ? await validateSlackConnection(credential.accessToken)
+      : await getAdapter(provider).validateConnection({
+          tx,
+          integrationId: "00000000-0000-4000-8000-000000000000",
+          credentials: credential,
+          mappings: getAdapter(provider).defaultMappings(),
+        });
+  const scopes = provider === "slack" ? [...SLACK_BOT_SCOPES] : OAUTH_SCOPES[provider];
   const rows = await tx.execute<{ id: string }>(sql`
     insert into integrations (
       workspace_id, provider, status, display_name, external_account_id, credential_ciphertext,
@@ -1152,8 +1171,8 @@ async function connectInside(
       'connected',
       ${validated.accountLabel},
       ${validated.externalAccountId},
-      ${sealCredential(credential)},
-      ${textArray(OAUTH_SCOPES[provider])},
+      ${sealCredential({ ...credential, accountLabel: validated.accountLabel })},
+      ${textArray(scopes)},
       current_setting('app.current_user_id', true),
       now()
     ) returning id

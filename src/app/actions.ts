@@ -70,11 +70,10 @@ import {
 import { writeAudit } from "@/server/audit";
 import { withUser } from "@/server/db/client";
 import { sql } from "drizzle-orm";
-import type { ProviderId } from "@/server/integrations/types";
 import { parseMotionEnabled } from "@/lib/apply-theme";
 import { resolveGuide } from "@/lib/screen-guides";
 import { saveProfilePreferences, setOnboardingPending } from "@/server/onboarding/service";
-import { OAUTH_PROVIDERS } from "@/lib/oauth-providers";
+import { isOAuthProvider, OAUTH_PROVIDERS } from "@/lib/oauth-providers";
 import {
   deleteOAuthApp,
   saveOAuthApp,
@@ -981,12 +980,12 @@ export async function testConnectionAction(formData: FormData): Promise<void> {
 }
 
 export async function oauthStartAction(formData: FormData): Promise<void> {
+  const provider = String(formData.get("provider"));
+  if (!isOAuthProvider(provider)) {
+    redirect(`/integrations?error=${encodeURIComponent("OAuth is not supported for this provider")}`);
+  }
   try {
-    const url = await beginOAuth(
-      await userId(),
-      String(formData.get("workspaceId")),
-      String(formData.get("provider")) as Exclude<ProviderId, "fake">,
-    );
+    const url = await beginOAuth(await userId(), String(formData.get("workspaceId")), provider);
     redirect(url);
   } catch (error) {
     unstable_rethrow(error);

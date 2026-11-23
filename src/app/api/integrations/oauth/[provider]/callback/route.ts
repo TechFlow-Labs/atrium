@@ -1,7 +1,7 @@
 import { redirect, unstable_rethrow } from "next/navigation";
+import { isOAuthProvider } from "@/lib/oauth-providers";
 import { getSessionUser } from "@/server/auth/session";
 import { completeOAuth } from "@/server/integrations/service";
-import type { ProviderId } from "@/server/integrations/types";
 
 export async function GET(
   request: Request,
@@ -10,7 +10,7 @@ export async function GET(
   const user = await getSessionUser();
   if (!user) redirect("/login");
   const { provider } = await context.params;
-  if (provider !== "linear" && provider !== "jira" && provider !== "github" && provider !== "gitlab" && provider !== "gitea") {
+  if (!isOAuthProvider(provider)) {
     return new Response("Unknown provider", { status: 404 });
   }
   const url = new URL(request.url);
@@ -26,8 +26,8 @@ export async function GET(
     redirect(`/integrations?error=${encodeURIComponent("Missing OAuth code or state from the provider")}`);
   }
   try {
-    const result = await completeOAuth(user.id, provider as Exclude<ProviderId, "fake">, code, state);
-    redirect(`/integrations/${result.integrationId}`);
+    const result = await completeOAuth(user.id, provider, code, state);
+    redirect(provider === "slack" ? "/chats" : `/integrations/${result.integrationId}`);
   } catch (error) {
     unstable_rethrow(error);
     const message = error instanceof Error ? error.message : "OAuth connection failed";

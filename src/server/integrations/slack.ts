@@ -1,5 +1,14 @@
 import { providerFetch } from "./http";
-import { ProviderError } from "./types";
+import { ProviderError, type StoredCredential } from "./types";
+
+/** Bot scopes requested by Add to Slack. Comma-separated on the authorize URL. */
+export const SLACK_BOT_SCOPES = [
+  "channels:history",
+  "channels:read",
+  "groups:history",
+  "groups:read",
+  "users:read",
+] as const;
 
 type SlackApiResponse = {
   ok: boolean;
@@ -47,6 +56,77 @@ async function slackGet<T extends SlackApiResponse>(
     throw new ProviderError(`Slack error: ${code}`, "unavailable", true, response.status);
   }
   return data;
+}
+
+type SlackOAuthAccess = {
+  ok?: boolean;
+  error?: string;
+  access_token?: string;
+  refresh_token?: string;
+  expires_in?: number;
+  team?: { id?: string; name?: string };
+};
+
+export async function exchangeSlackCode(input: {
+  code: string;
+  redirectUri: string;
+  clientId: string;
+  clientSecret: string;
+}): Promise<StoredCredential> {
+  const body = new URLSearchParams({
+    client_id: input.clientId,
+    client_secret: input.clientSecret,
+    code: input.code,
+    redirect_uri: input.redirectUri,
+  });
+  const json = await slackOAuthAccess(body);
+  return slackCredentialFromAccess(json);
+}
+
+export async function refreshSlackAccessToken(
+  credential: StoredCredential,
+  app: { clientId: string; clientSecret: string },
+): Promise<StoredCredential> {
+  const refreshToken = credential.refreshToken;
+  if (!refreshToken) {
+    throw new ProviderError("Slack access token expired. Add Slack again.", "unauthorized", false);
+  }
+  const body = new URLSearchParams({
+    grant_type: "refresh_token",
+    client_id: app.clientId,
+    client_secret: app.clientSecret,
+    refresh_token: refreshToken,
+  });
+  const json = await slackOAuthAccess(body);
+  const next = slackCredentialFromAccess(json, credential);
+  return { ...credential, ...next, refreshToken: next.refreshToken ?? refreshToken };
+}
+
+async function slackOAuthAccess(body: URLSearchParams): Promise<SlackOAuthAccess> {
+  const response = await fetch("https://slack.com/api/oauth.v2.access", {
+    method: "POST",
+    headers: { "content-type": "application/x-www-form-urlencoded" },
+    body,
+  });
+  let json: SlackOAuthAccess;
+  try {
+    json = (await response.json()) as SlackOAuthAccess;
+  } catch {
+    throw new Error("Slack returned an invalid OAuth response");
+  }
+  if (!response.ok || json.ok === false || !json.access_token) {
+    throw new Error(json.error ?? "Slack did not return a bot token");
+  }
+  return json;
+}
+
+function slackCredentialFromAccess(json: SlackOAuthAccess, previous?: StoredCredential): StoredCredential {
+  return {
+    accessToken: json.access_token ?? previous?.accessToken ?? "",
+    refreshToken: json.refresh_token ?? previous?.refreshToken,
+    expiresAt: json.expires_in ? new Date(Date.now() + json.expires_in * 1000).toISOString() : previous?.expiresAt,
+    accountLabel: json.team?.name?.trim() || previous?.accountLabel,
+  };
 }
 
 export async function validateSlackConnection(accessToken: string): Promise<{

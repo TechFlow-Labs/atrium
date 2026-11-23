@@ -112,7 +112,7 @@ export function ConnectForm({
             <p className="mt-1 text-xs text-muted">Paste a Gitea personal access token with issue and repository read/write. Set the site URL for self-hosted instances.</p>
           ) : selected === "slack" ? (
             <p className="mt-1 text-xs text-muted">
-              Free Slack workspaces work. After saving, invite the bot to each channel you want on Chats.
+              Optional if you use Add to Slack. Paste an existing bot token (xoxb-), then invite the app to each channel you want on Chats.
             </p>
           ) : selected === "obsidian" ? (
             <p className="mt-1 text-xs text-muted">

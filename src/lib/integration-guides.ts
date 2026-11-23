@@ -108,22 +108,25 @@ const JIRA_OAUTH: IntegrationGuide = {
   ],
 };
 
-const SLACK_TOKEN: IntegrationGuide = {
+const SLACK_OAUTH: IntegrationGuide = {
   provider: "slack",
   title: "Slack",
   needs: [
-    "Permission to install apps in your Slack workspace.",
-    "The channels you want to show on the Chats page.",
+    "Permission to install apps in the Slack workspace you want on Chats.",
+    "A Slack app with a client ID and client secret.",
   ],
   steps: [
-    "Open api.slack.com/apps, choose Create New App → From scratch, name it, and select your workspace.",
-    "Open OAuth & Permissions → Bot Token Scopes, then add channels:history, channels:read, groups:history, groups:read, and users:read.",
-    "Scroll up and choose Install to Workspace, then approve the request.",
-    "Copy the Bot User OAuth Token. It starts with xoxb-. Paste it into Atrium.",
-    "In Slack, open each channel you want in Atrium and type /invite @YourApp (use your app's name).",
+    "Open api.slack.com/apps, choose Create New App → From scratch, name it Atrium, and pick a workspace you administer.",
+    "Open OAuth & Permissions. Add this Redirect URL: {callbackUrl}",
+    "Under Bot Token Scopes, add channels:history, channels:read, groups:history, groups:read, and users:read.",
+    "Open Basic Information and copy the Client ID and Client Secret into the Slack fields in Atrium (or set SLACK_CLIENT_ID and SLACK_CLIENT_SECRET on the server).",
+    "To install into workspaces other than the one that owns the app, open Manage Distribution and activate public distribution. Directory review is not required.",
+    "In Atrium, choose Add to Slack and pick the workspace.",
+    "In Slack, open each channel you want on Chats and type /invite @Atrium.",
   ],
   notes: [
     "Atrium reads today's messages. It does not post to Slack.",
+    "You can still paste a bot token that starts with xoxb-.",
   ],
 };
 
@@ -151,7 +154,7 @@ export const INTEGRATION_GUIDES: Record<string, IntegrationGuide> = {
   github: GITHUB_OAUTH,
   gitlab: GITLAB_OAUTH,
   gitea: GITEA_OAUTH,
-  slack: SLACK_TOKEN,
+  slack: SLACK_OAUTH,
   obsidian: OBSIDIAN_NOTES,
 };
 

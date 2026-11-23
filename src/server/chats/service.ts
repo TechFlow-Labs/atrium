@@ -1,12 +1,15 @@
 import { sql } from "drizzle-orm";
 import { requireAction } from "../authz/membership";
 import { withUser } from "../db/client";
-import { openCredential } from "../integrations/credentials";
+import { openCredential, sealCredential } from "../integrations/credentials";
+import { resolveOAuthApp } from "../integrations/oauth-apps";
 import {
   listSlackMessagesSince,
+  refreshSlackAccessToken,
   validateSlackConnection,
   type SlackMessage,
 } from "../integrations/slack";
+import { credentialNeedsRefresh } from "../integrations/token-refresh";
 import type { ChatProviderId } from "../integrations/types";
 
 export type ChatFeedItem = SlackMessage & {
@@ -149,12 +152,26 @@ export async function listTodayChatMessages(
 
     for (const row of rows) {
       if (!row.credential_ciphertext || row.status === "revoked") continue;
-      const credentials = openCredential(row.credential_ciphertext);
+      let credentials = openCredential(row.credential_ciphertext);
       if (!credentials?.accessToken) {
         errors.push({ integrationId: row.id, message: "Slack credential is missing" });
         continue;
       }
       try {
+        if (credentialNeedsRefresh(credentials)) {
+          const app = await resolveOAuthApp(tx, workspaceId, "slack");
+          if (app) {
+            credentials = await refreshSlackAccessToken(credentials, app);
+            await tx.execute(sql`
+              update integrations
+              set credential_ciphertext = ${sealCredential(credentials)},
+                  last_error = null,
+                  status = 'connected',
+                  last_validated_at = now()
+              where id = ${row.id}::uuid
+            `);
+          }
+        }
         const feed = await listSlackMessagesSince(credentials.accessToken, oldest, {
           teamId: row.external_account_id,
         });

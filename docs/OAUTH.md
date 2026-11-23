@@ -1,6 +1,6 @@
 # Provider OAuth setup
 
-Atrium can connect Linear, Jira Cloud, GitLab, and Gitea through each provider’s authorize screen. GitHub uses a **GitHub App** (installation tokens that refresh automatically). Without OAuth or App credentials, admins can still paste a personal access token.
+Atrium can connect Linear, Jira Cloud, GitLab, Gitea, and Slack through each provider’s authorize screen. GitHub uses a **GitHub App** (installation tokens that refresh automatically). Without OAuth or App credentials, admins can still paste a personal access token or, for Slack, a bot token.
 
 OAuth is enabled per provider when both env vars are set:
 
@@ -122,13 +122,28 @@ JIRA_CLIENT_ID=...
 JIRA_CLIENT_SECRET=...
 ```
 
+## Slack
+
+1. Create an app at [api.slack.com/apps](https://api.slack.com/apps) → **Create New App** → **From scratch**.
+2. **OAuth & Permissions** → Redirect URL: `{BETTER_AUTH_URL}/api/integrations/oauth/slack/callback`.
+3. Bot token scopes: `channels:history`, `channels:read`, `groups:history`, `groups:read`, `users:read`.
+4. To install into workspaces other than the one that created the app, activate public distribution. App Directory review is not required.
+5. Leave token rotation off unless you want short-lived bot tokens. Atrium stores a refresh token when Slack returns one.
+
+```bash
+SLACK_CLIENT_ID=...
+SLACK_CLIENT_SECRET=...
+```
+
+Integrations then shows **Add to Slack**. After install, invite the app to each channel with `/invite @Atrium`. A pasted `xoxb-` token still works.
+
 ## Local checklist
 
 1. `BETTER_AUTH_URL` matches the browser origin (`http://127.0.0.1:38471` for `pnpm dev`).
 2. For GitHub App: Client ID, private key, slug, and webhook secret are set; Setup and Webhook URLs match `BETTER_AUTH_URL`.
 3. For other providers: callback URLs in the provider consoles match `pnpm oauth:redirects` exactly.
 4. Env is loaded and the app (and worker, in production) was restarted.
-5. On **Integrations**, GitHub shows **Install GitHub App** when App env is configured; other providers show **Continue with …** when OAuth is configured.
+5. On **Integrations**, GitHub shows **Install GitHub App** when App env is configured; Slack shows **Add to Slack**; other providers show **Continue with …** when OAuth is configured.
 
 ## Troubleshooting
 

@@ -221,6 +221,8 @@ export function HomeNoProjects({
                     <DialogDescription>
                       {selected === "github" && githubApp
                         ? "Install the GitHub App on the account that owns your repositories."
+                        : selected === "slack" && oauth[selected]
+                          ? "Choose a Slack workspace. Atrium installs there and stores the bot token."
                         : isOAuthProvider(selected) && !oauth[selected]
                         ? `Add the ${providerLabel(selected)} OAuth app once, then connect this workspace.`
                         : oauth[selected]
@@ -265,7 +267,7 @@ export function HomeNoProjects({
                     <input type="hidden" name="workspaceId" value={workspaceId} />
                     <input type="hidden" name="provider" value={selected} />
                     <Button type="submit" className="w-full">
-                      Continue with {providerLabel(selected)}
+                      {selected === "slack" ? "Add to Slack" : `Continue with ${providerLabel(selected)}`}
                     </Button>
                   </form>
                   <div className="flex items-center gap-3 text-xs uppercase tracking-[0.14em] text-muted">

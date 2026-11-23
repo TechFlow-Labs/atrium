@@ -42,6 +42,7 @@ The role passwords must not contain single quotes. `docker/postgres/init.sh` run
 | `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET` | blank | Legacy classic GitHub OAuth App. Prefer the GitHub App env above. |
 | `GITLAB_CLIENT_ID`, `GITLAB_CLIENT_SECRET` | blank | Enables OAuth for GitLab. |
 | `GITEA_CLIENT_ID`, `GITEA_CLIENT_SECRET` | blank | Enables OAuth for Gitea. |
+| `SLACK_CLIENT_ID`, `SLACK_CLIENT_SECRET` | blank | Enables Add to Slack. A pasted `xoxb-` token still works. |
 | `GITEA_SITE_URL` | `https://gitea.com` | Set for a self-hosted Gitea. |
 | `ALLOW_FAKE_PROVIDER` | `false` | Keep `false` in production. |
 | `SMTP_HOST` | blank | Mail host for password reset. Production: `linux230.papaki.gr`. |

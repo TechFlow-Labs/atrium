@@ -43,7 +43,7 @@ const COPY: Record<string, string> = {
   github: "Track GitHub issues and Project Status from repositories you choose.",
   gitlab: "Sync GitLab issues from projects you choose.",
   gitea: "Sync Gitea issues from repositories you choose.",
-  slack: "Read today's channel messages on the Chats dashboard with a free Slack bot token.",
+  slack: "Add Atrium to a Slack workspace and read today's channel messages on Chats.",
   obsidian: "Browse markdown from a LiveSync vault — locally on this host, or remotely via the vault bridge HTTPS URL.",
 };
 
@@ -204,7 +204,7 @@ export function IntegrationsOnboarding({
                         : isOAuthProvider(selected) && !oauth[selected]
                         ? `Add the ${providerLabel(selected)} OAuth app once. It is saved to this workspace and used from now on.`
                         : selected === "slack"
-                        ? "Paste a Slack bot token (xoxb-…). Create an internal Slack app with channels:history, channels:read, groups:history, groups:read, and users:read, install it, then invite the bot to channels."
+                        ? "Choose a Slack workspace. Atrium installs there and stores the bot token for you. Invite the app to each channel you want on Chats."
                         : selected === "obsidian"
                           ? "If the vault lives on another VPS, deploy services/obsidian-vault-bridge there and paste its HTTPS URL. Same host: use the LiveSync mirror path under OBSIDIAN_VAULT_ROOT (for example /root/vaults/THEVAULT)."
                           : oauth[selected]
@@ -250,7 +250,7 @@ export function IntegrationsOnboarding({
                         <input type="hidden" name="workspaceId" value={workspaceId} />
                         <input type="hidden" name="provider" value={selected} />
                         <Button type="submit" className="w-full">
-                          Continue with {providerLabel(selected)}
+                          {selected === "slack" ? "Add to Slack" : `Continue with ${providerLabel(selected)}`}
                         </Button>
                       </form>
                       <div className="flex items-center gap-3 text-xs uppercase tracking-[0.14em] text-muted">
