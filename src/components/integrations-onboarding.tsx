@@ -13,8 +13,10 @@ import {
 } from "@/app/actions";
 import { OAuthSetupForm } from "@/components/oauth-setup-form";
 import { IntegrationGuide } from "@/components/integration-guide";
+import { ProviderTokenFallback } from "@/components/provider-token-fallback";
 import { ShareToWorkspaceDialog } from "@/components/share-to-workspace-dialog";
 import { isOAuthProvider } from "@/lib/oauth-providers";
+import { providerAppBadge, providerAppConnectLabel } from "@/lib/provider-connect";
 import { ConnectForm } from "@/components/connect-form";
 import { ProviderIcon, providerLabel } from "@/components/provider-icon";
 import { Badge } from "@/components/ui/badge";
@@ -76,8 +78,8 @@ export function IntegrationsOnboarding({
         <p className="text-xs uppercase tracking-[0.18em] text-muted">Onboarding</p>
         <h1 className="text-4xl">Integrations</h1>
         <p className="mt-2 max-w-2xl text-sm text-muted">
-          Connect providers with OAuth or a pasted token, and issue MCP tokens so any AI client can work in this
-          workspace. Credentials stay encrypted on the server.
+          Connect each provider with its app (OAuth or install), then issue MCP tokens so any AI client can work in
+          this workspace. Credentials stay encrypted on the server.
         </p>
         {error ? (
           <p className="mt-3 rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive" role="alert">
@@ -159,13 +161,19 @@ export function IntegrationsOnboarding({
       <section className="space-y-3">
         <div>
           <h2 className="text-2xl">Add a provider</h2>
-          <p className="text-sm text-muted">Pick a platform to open its connection settings.</p>
+          <p className="text-sm text-muted">Pick a platform. App setup is preferred; tokens stay as a fallback.</p>
         </div>
         {!canAdmin ? (
           <p className="text-sm text-muted">Only owners and admins can connect providers.</p>
         ) : (
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-            {providers.map((provider) => (
+            {providers.map((provider) => {
+              const badge = providerAppBadge({
+                provider,
+                oauthReady: Boolean(oauth[provider]),
+                githubApp,
+              });
+              return (
               <button
                 key={provider}
                 type="button"
@@ -174,21 +182,14 @@ export function IntegrationsOnboarding({
               >
                 <div className="flex items-start justify-between gap-2">
                   <ProviderIcon provider={provider} size="lg" />
-                  {provider === "github" && githubApp ? (
-                    <Badge tone="connected">App ready</Badge>
-                  ) : oauth[provider] ? (
-                    <Badge tone="connected">OAuth ready</Badge>
-                  ) : isOAuthProvider(provider) ? (
-                    <Badge tone="neutral">Setup needed</Badge>
-                  ) : (
-                    <Badge tone="neutral">Token</Badge>
-                  )}
+                  <Badge tone={badge.tone}>{badge.label}</Badge>
                 </div>
                 <p className="mt-3 text-lg font-medium capitalize">{providerLabel(provider)}</p>
-                <p className="mt-1 text-sm text-muted">{COPY[provider] ?? "Connect this provider with a token or OAuth."}</p>
+                <p className="mt-1 text-sm text-muted">{COPY[provider] ?? "Connect this provider with its app."}</p>
                 <p className="mt-3 text-xs font-medium text-foreground/80">Configure →</p>
               </button>
-            ))}
+              );
+            })}
           </div>
         )}
       </section>
@@ -206,16 +207,16 @@ export function IntegrationsOnboarding({
                       {selected === "github" && githubApp
                         ? "Install the GitHub App on the org or user that owns your repositories. Installation tokens refresh automatically."
                         : isOAuthProvider(selected) && !oauth[selected]
-                        ? `Add the ${providerLabel(selected)} OAuth app once. It is saved to this workspace and used from now on.`
+                        ? `Create a ${providerLabel(selected)} app once, paste its client ID and secret, then authorize Atrium.`
                         : selected === "slack"
                         ? "Choose a Slack workspace. Atrium installs there and stores the bot token for you. Invite the app to each channel you want on Chats."
                         : selected === "figma"
                         ? "Authorize Figma, then link a file URL from each project's Manage dialog to show the embed and design comments."
                         : selected === "obsidian"
-                          ? "If the vault lives on another VPS, deploy services/obsidian-vault-bridge there and paste its HTTPS URL. Same host: use the LiveSync mirror path under OBSIDIAN_VAULT_ROOT (for example /root/vaults/THEVAULT)."
+                          ? "Obsidian has no OAuth app. If the vault lives on another VPS, deploy services/obsidian-vault-bridge there and paste its HTTPS URL. Same host: use the LiveSync mirror path under OBSIDIAN_VAULT_ROOT."
                           : oauth[selected]
-                            ? `Sign in with ${providerLabel(selected)} to authorize Atrium, or paste an access token below.`
-                            : `Paste an access token for this workspace. OAuth is available after a client ID and secret are added under OAuth apps above, or set as ${selected.toUpperCase()}_CLIENT_ID and _CLIENT_SECRET on the server.`}
+                            ? `Authorize Atrium with the ${providerLabel(selected)} app. A personal access token remains available as a fallback.`
+                            : `Paste an access token for this workspace.`}
                     </DialogDescription>
                   </div>
                 </div>
@@ -226,29 +227,19 @@ export function IntegrationsOnboarding({
                   <form action={githubAppInstallAction}>
                     <input type="hidden" name="workspaceId" value={workspaceId} />
                     <Button type="submit" className="w-full">
-                      Install GitHub App
+                      {providerAppConnectLabel("github")}
                     </Button>
                   </form>
-                  <div className="flex items-center gap-3 text-xs uppercase tracking-[0.14em] text-muted">
-                    <span className="h-px flex-1 bg-border" />
-                    Or paste a token
-                    <span className="h-px flex-1 bg-border" />
-                  </div>
                 </>
               ) : null}
               {selected !== "github" || !githubApp ? (
                 <>
                   {isOAuthProvider(selected) && !oauth[selected] ? (
-                    <>
-                      <OAuthSetupForm workspaceId={workspaceId} provider={selected} callbackBase={callbackBase} />
-                      <div className="flex items-center gap-3 text-xs uppercase tracking-[0.14em] text-muted">
-                        <span className="h-px flex-1 bg-border" />
-                        Or paste a token
-                        <span className="h-px flex-1 bg-border" />
-                      </div>
-                    </>
+                    <OAuthSetupForm workspaceId={workspaceId} provider={selected} callbackBase={callbackBase} />
                   ) : null}
-                  {!isOAuthProvider(selected) ? <IntegrationGuide provider={selected} callbackBase={callbackBase} defaultOpen /> : null}
+                  {!isOAuthProvider(selected) ? (
+                    <IntegrationGuide provider={selected} callbackBase={callbackBase} defaultOpen />
+                  ) : null}
                   {oauth[selected] ? (
                     <>
                       <IntegrationGuide provider={selected} callbackBase={callbackBase} />
@@ -256,29 +247,32 @@ export function IntegrationsOnboarding({
                         <input type="hidden" name="workspaceId" value={workspaceId} />
                         <input type="hidden" name="provider" value={selected} />
                         <Button type="submit" className="w-full">
-                          {selected === "slack"
-                            ? "Add to Slack"
-                            : selected === "figma"
-                              ? "Continue with Figma"
-                              : `Continue with ${providerLabel(selected)}`}
+                          {providerAppConnectLabel(selected)}
                         </Button>
                       </form>
-                      <div className="flex items-center gap-3 text-xs uppercase tracking-[0.14em] text-muted">
-                        <span className="h-px flex-1 bg-border" />
-                        Or paste a token
-                        <span className="h-px flex-1 bg-border" />
-                      </div>
                     </>
                   ) : null}
                 </>
               ) : null}
-              <ConnectForm
-                workspaceId={workspaceId}
-                providers={[selected]}
-                provider={selected}
-                compact
-                action={connectTokenAction as (state: ActionState, formData: FormData) => Promise<ActionState>}
-              />
+              {isOAuthProvider(selected) || selected === "github" ? (
+                <ProviderTokenFallback providerLabel={providerLabel(selected)}>
+                  <ConnectForm
+                    workspaceId={workspaceId}
+                    providers={[selected]}
+                    provider={selected}
+                    compact
+                    action={connectTokenAction as (state: ActionState, formData: FormData) => Promise<ActionState>}
+                  />
+                </ProviderTokenFallback>
+              ) : (
+                <ConnectForm
+                  workspaceId={workspaceId}
+                  providers={[selected]}
+                  provider={selected}
+                  compact
+                  action={connectTokenAction as (state: ActionState, formData: FormData) => Promise<ActionState>}
+                />
+              )}
             </>
           ) : null}
         </DialogContent>

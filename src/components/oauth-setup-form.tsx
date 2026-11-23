@@ -42,7 +42,7 @@ export function OAuthSetupForm({
       <input type="hidden" name="workspaceId" value={workspaceId} />
       <input type="hidden" name="provider" value={provider} />
       <p className="text-sm text-muted">
-        Register an OAuth app with {label}, then enter its credentials. You will be sent to {label} to authorize Atrium.
+        Create a {label} app, then enter its credentials. You will be sent to {label} to authorize Atrium.
       </p>
       <div>
         <Label htmlFor={`oauth-setup-${provider}-client-id`}>Client ID</Label>
@@ -91,7 +91,7 @@ export function OAuthSetupForm({
         </p>
       ) : null}
       <Button type="submit" className="w-full" disabled={pending}>
-        {pending ? "Starting" : `Save and continue to ${label}`}
+        {pending ? "Starting…" : `Save app and continue to ${label}`}
       </Button>
     </form>
   );

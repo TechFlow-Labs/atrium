@@ -32,11 +32,11 @@ export function OAuthAppsPanel({
   return (
     <section className="space-y-4">
       <div>
-        <h2 className="text-2xl">OAuth apps</h2>
+        <h2 className="text-2xl">Provider apps</h2>
         <p className="text-sm text-muted">
-          Register an OAuth app with each provider and paste its client ID and secret here. Each provider&apos;s callback
-          URL must be added to its app settings. Secrets are encrypted and never shown again. GitHub prefers a
-          deployment-wide GitHub App configured in the server environment.
+          Create an app with each provider and paste its client ID and secret here. Add the callback URL below to that
+          app&apos;s settings. Secrets are encrypted and never shown again. GitHub prefers a deployment-wide GitHub App
+          configured in the server environment.
         </p>
       </div>
       <div className="grid gap-4 md:grid-cols-2">

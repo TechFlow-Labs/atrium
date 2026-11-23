@@ -12,6 +12,7 @@ import {
 import { ConnectForm } from "@/components/connect-form";
 import { IntegrationGuide } from "@/components/integration-guide";
 import { OAuthSetupForm } from "@/components/oauth-setup-form";
+import { ProviderTokenFallback } from "@/components/provider-token-fallback";
 import { ProviderIcon, providerLabel } from "@/components/provider-icon";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -25,6 +26,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input, Label, Textarea } from "@/components/ui/field";
 import { isOAuthProvider } from "@/lib/oauth-providers";
+import { providerAppBadge, providerAppConnectLabel } from "@/lib/provider-connect";
 
 type IntegrationRow = {
   id: string;
@@ -163,13 +165,14 @@ export function HomeNoProjects({
                       >
                         <div className="flex items-start justify-between gap-2">
                           <ProviderIcon provider={provider} />
-                          {provider === "github" && githubApp ? (
-                            <Badge tone="connected">App</Badge>
-                          ) : oauth[provider] ? (
-                            <Badge tone="connected">OAuth</Badge>
-                          ) : (
-                            <Badge tone="neutral">Token</Badge>
-                          )}
+                          {(() => {
+                            const badge = providerAppBadge({
+                              provider,
+                              oauthReady: Boolean(oauth[provider]),
+                              githubApp,
+                            });
+                            return <Badge tone={badge.tone}>{badge.label}</Badge>;
+                          })()}
                         </div>
                         <p className="mt-2 text-sm font-medium">{providerLabel(provider)}</p>
                         <p className="mt-0.5 text-xs text-muted">
@@ -224,9 +227,9 @@ export function HomeNoProjects({
                         : selected === "slack" && oauth[selected]
                           ? "Choose a Slack workspace. Atrium installs there and stores the bot token."
                         : isOAuthProvider(selected) && !oauth[selected]
-                        ? `Add the ${providerLabel(selected)} OAuth app once, then connect this workspace.`
+                        ? `Create a ${providerLabel(selected)} app once, paste its client ID and secret, then authorize Atrium.`
                         : oauth[selected]
-                          ? `Sign in with ${providerLabel(selected)}, or paste an access token.`
+                          ? `Authorize Atrium with the ${providerLabel(selected)} app.`
                           : `Paste an access token for ${providerLabel(selected)}.`}
                     </DialogDescription>
                   </div>
@@ -238,27 +241,15 @@ export function HomeNoProjects({
                   <form action={githubAppInstallAction}>
                     <input type="hidden" name="workspaceId" value={workspaceId} />
                     <Button type="submit" className="w-full">
-                      Install GitHub App
+                      {providerAppConnectLabel("github")}
                     </Button>
                   </form>
-                  <div className="flex items-center gap-3 text-xs uppercase tracking-[0.14em] text-muted">
-                    <span className="h-px flex-1 bg-border" />
-                    Or paste a token
-                    <span className="h-px flex-1 bg-border" />
-                  </div>
                 </>
               ) : null}
               {selected !== "github" || !githubApp ? (
                 <>
               {isOAuthProvider(selected) && !oauth[selected] ? (
-                <>
-                  <OAuthSetupForm workspaceId={workspaceId} provider={selected} callbackBase={callbackBase} />
-                  <div className="flex items-center gap-3 text-xs uppercase tracking-[0.14em] text-muted">
-                    <span className="h-px flex-1 bg-border" />
-                    Or paste a token
-                    <span className="h-px flex-1 bg-border" />
-                  </div>
-                </>
+                <OAuthSetupForm workspaceId={workspaceId} provider={selected} callbackBase={callbackBase} />
               ) : null}
               {oauth[selected] ? (
                 <>
@@ -267,29 +258,32 @@ export function HomeNoProjects({
                     <input type="hidden" name="workspaceId" value={workspaceId} />
                     <input type="hidden" name="provider" value={selected} />
                     <Button type="submit" className="w-full">
-                      {selected === "slack"
-                        ? "Add to Slack"
-                        : selected === "figma"
-                          ? "Continue with Figma"
-                          : `Continue with ${providerLabel(selected)}`}
+                      {providerAppConnectLabel(selected)}
                     </Button>
                   </form>
-                  <div className="flex items-center gap-3 text-xs uppercase tracking-[0.14em] text-muted">
-                    <span className="h-px flex-1 bg-border" />
-                    Or paste a token
-                    <span className="h-px flex-1 bg-border" />
-                  </div>
                 </>
               ) : null}
                 </>
               ) : null}
-              <ConnectForm
-                workspaceId={workspaceId}
-                providers={[selected]}
-                provider={selected}
-                compact
-                action={connectTokenAction as (state: ActionState, formData: FormData) => Promise<ActionState>}
-              />
+              {isOAuthProvider(selected) || selected === "github" ? (
+                <ProviderTokenFallback providerLabel={providerLabel(selected)}>
+                  <ConnectForm
+                    workspaceId={workspaceId}
+                    providers={[selected]}
+                    provider={selected}
+                    compact
+                    action={connectTokenAction as (state: ActionState, formData: FormData) => Promise<ActionState>}
+                  />
+                </ProviderTokenFallback>
+              ) : (
+                <ConnectForm
+                  workspaceId={workspaceId}
+                  providers={[selected]}
+                  provider={selected}
+                  compact
+                  action={connectTokenAction as (state: ActionState, formData: FormData) => Promise<ActionState>}
+                />
+              )}
             </>
           ) : null}
         </DialogContent>
