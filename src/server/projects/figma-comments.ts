@@ -23,6 +23,7 @@ export type FigmaCommentView = {
   createdAt: string;
   resolvedAt: string | null;
   url: string | null;
+  nodeId: string | null;
 };
 
 export type ProjectFigmaCommentsResult = {
@@ -35,7 +36,7 @@ export type ProjectFigmaCommentsResult = {
   unavailableReason: string | null;
 };
 
-function toView(comment: FigmaComment): FigmaCommentView {
+function toView(comment: FigmaComment, nodeId = comment.nodeId): FigmaCommentView {
   return {
     id: comment.id,
     body: comment.message,
@@ -43,6 +44,7 @@ function toView(comment: FigmaComment): FigmaCommentView {
     createdAt: comment.createdAt,
     resolvedAt: comment.resolvedAt,
     url: comment.url,
+    nodeId,
   };
 }
 
@@ -57,7 +59,7 @@ function threadComments(comments: FigmaComment[]): FigmaCommentThread[] {
   }
   return roots.map((root) => ({
     root: toView(root),
-    replies: (byParent.get(root.id) ?? []).map(toView),
+    replies: (byParent.get(root.id) ?? []).map((reply) => toView(reply, reply.nodeId ?? root.nodeId)),
   }));
 }
 

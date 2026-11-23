@@ -1,3 +1,4 @@
+import { figmaCommentNodeId, figmaEmbedNodeParam } from "@/lib/figma-embed";
 import { providerFetch } from "./http";
 import { ProviderError, type StoredCredential } from "./types";
 
@@ -27,6 +28,8 @@ export type FigmaComment = {
   createdAt: string;
   resolvedAt: string | null;
   url: string | null;
+  /** Layer the pin is attached to, in Figma's `12:34` form. Null for a loose canvas pin. */
+  nodeId: string | null;
 };
 
 type FigmaApiError = {
@@ -144,12 +147,35 @@ export function figmaEditUrl(fileKey: string, kind: FigmaEmbedKind): string {
   return `https://www.figma.com/${pathKind}/${encodeURIComponent(fileKey)}`;
 }
 
-export function figmaEmbedUrl(fileKey: string, kind: FigmaEmbedKind): string {
+export function figmaEmbedUrl(fileKey: string, kind: FigmaEmbedKind, nodeId?: string | null): string {
   const pathKind = kind === "file" ? "design" : kind;
   const url = new URL(`https://embed.figma.com/${pathKind}/${encodeURIComponent(fileKey)}`);
   // Figma leaves the embed on the logo until this host id is present.
   url.searchParams.set("embed-host", "atrium");
+  if (nodeId?.trim()) url.searchParams.set("node-id", figmaEmbedNodeParam(nodeId));
   return url.toString();
+}
+
+function figmaCommentLink(fileKey: string, nodeId: string | null, commentId: string): string {
+  const edit = new URL(figmaEditUrl(fileKey, "design"));
+  if (nodeId) edit.searchParams.set("node-id", figmaEmbedNodeParam(nodeId));
+  edit.hash = commentId;
+  return edit.toString();
+}
+
+function toFigmaComment(comment: FigmaCommentNode & { id: string }, fileKey: string, fallbackMessage = ""): FigmaComment {
+  const nodeId = figmaCommentNodeId(comment.client_meta);
+  return {
+    id: comment.id,
+    message: (comment.message ?? fallbackMessage).trim(),
+    parentId: comment.parent_id?.trim() || null,
+    authorLabel: comment.user?.handle?.trim() || comment.user?.name?.trim() || "Figma",
+    authorId: comment.user?.id != null ? String(comment.user.id) : null,
+    createdAt: comment.created_at ?? new Date().toISOString(),
+    resolvedAt: comment.resolved_at ?? null,
+    url: figmaCommentLink(fileKey, nodeId, comment.id),
+    nodeId,
+  };
 }
 
 type FigmaTokenResponse = {
@@ -267,19 +293,9 @@ export async function listFigmaComments(accessToken: string, fileKey: string): P
     accessToken,
     `/v1/files/${encodeURIComponent(fileKey)}/comments`,
   );
-  const editBase = figmaEditUrl(fileKey, "design");
   return (data.comments ?? [])
     .filter((comment): comment is FigmaCommentNode & { id: string } => Boolean(comment.id))
-    .map((comment) => ({
-      id: comment.id,
-      message: (comment.message ?? "").trim(),
-      parentId: comment.parent_id?.trim() || null,
-      authorLabel: comment.user?.handle?.trim() || comment.user?.name?.trim() || "Figma",
-      authorId: comment.user?.id != null ? String(comment.user.id) : null,
-      createdAt: comment.created_at ?? new Date().toISOString(),
-      resolvedAt: comment.resolved_at ?? null,
-      url: `${editBase}?node-id=0-1#${encodeURIComponent(comment.id)}`,
-    }))
+    .map((comment) => toFigmaComment(comment, fileKey))
     .sort((a, b) => Date.parse(a.createdAt) - Date.parse(b.createdAt));
 }
 
@@ -302,15 +318,9 @@ export async function postFigmaComment(
     body,
   );
   if (!data.id) throw new Error("Figma did not return the new comment");
-  const editBase = figmaEditUrl(input.fileKey, "design");
+  const comment = toFigmaComment({ ...data, id: data.id }, input.fileKey, message);
   return {
-    id: data.id,
-    message: (data.message ?? message).trim(),
-    parentId: data.parent_id?.trim() || input.parentCommentId?.trim() || null,
-    authorLabel: data.user?.handle?.trim() || data.user?.name?.trim() || "Figma",
-    authorId: data.user?.id != null ? String(data.user.id) : null,
-    createdAt: data.created_at ?? new Date().toISOString(),
-    resolvedAt: data.resolved_at ?? null,
-    url: `${editBase}?node-id=0-1#${encodeURIComponent(data.id)}`,
+    ...comment,
+    parentId: comment.parentId || input.parentCommentId?.trim() || null,
   };
 }

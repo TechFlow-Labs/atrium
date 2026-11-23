@@ -14,8 +14,7 @@ import { ScreenLoader } from "@/components/screen-loader";
 import { connection } from "next/server";
 import { notFound, redirect } from "next/navigation";
 import { archiveProjectAction, createMilestoneAction, createTaskAction } from "@/app/actions";
-import { FigmaProjectComments } from "@/components/figma-project-comments";
-import { FigmaProjectEmbed } from "@/components/figma-project-embed";
+import { FigmaProjectPanel } from "@/components/figma-project-panel";
 import { ProjectDeleteDialog } from "@/components/project-delete-dialog";
 import { ProjectManageDialog } from "@/components/project-manage-dialog";
 import { OpenInProviderButton, ProviderIcon } from "@/components/provider-icon";
@@ -295,34 +294,28 @@ async function ProjectContent({ params }: { params: Promise<{ projectId: string 
       </section>
 
       {project.figma_file_key && project.figma_file_url ? (
-        <section className="grid gap-4 xl:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]">
-          <FigmaProjectEmbed
-            fileName={project.figma_file_name}
-            editUrl={project.figma_file_url}
-            embedUrl={
-              figmaComments.embedUrl ??
-              figmaEmbedUrl(
-                project.figma_file_key,
-                project.figma_embed_kind === "board" ||
-                  project.figma_embed_kind === "proto" ||
-                  project.figma_embed_kind === "file"
-                  ? project.figma_embed_kind
-                  : "design",
-              )
-            }
-          />
-          <div className="rounded-xl border bg-card p-4">
-            <FigmaProjectComments
-              workspaceId={current.id}
-              projectId={project.id}
-              threads={figmaComments.threads}
-              canComment={figmaComments.canComment}
-              canWrite={canWrite}
-              unavailableReason={figmaComments.unavailableReason}
-              currentUserName={user.name}
-            />
-          </div>
-        </section>
+        <FigmaProjectPanel
+          fileName={project.figma_file_name}
+          editUrl={project.figma_file_url}
+          embedUrl={
+            figmaComments.embedUrl ??
+            figmaEmbedUrl(
+              project.figma_file_key,
+              project.figma_embed_kind === "board" ||
+                project.figma_embed_kind === "proto" ||
+                project.figma_embed_kind === "file"
+                ? project.figma_embed_kind
+                : "design",
+            )
+          }
+          workspaceId={current.id}
+          projectId={project.id}
+          threads={figmaComments.threads}
+          canComment={figmaComments.canComment}
+          canWrite={canWrite}
+          unavailableReason={figmaComments.unavailableReason}
+          currentUserName={user.name}
+        />
       ) : null}
 
       <section className="grid gap-4 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]">

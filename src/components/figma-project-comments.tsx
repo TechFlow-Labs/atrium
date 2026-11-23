@@ -51,6 +51,8 @@ export function FigmaProjectComments({
   canWrite,
   unavailableReason,
   currentUserName,
+  selectedId = null,
+  onSelect,
 }: {
   workspaceId: string;
   projectId: string;
@@ -59,6 +61,8 @@ export function FigmaProjectComments({
   canWrite: boolean;
   unavailableReason: string | null;
   currentUserName?: string;
+  selectedId?: string | null;
+  onSelect?: (commentId: string) => void;
 }) {
   const [state, formAction, pending] = useActionState<ActionState, FormData>(addFigmaCommentAction, {});
   const [draft, setDraft] = useState("");
@@ -87,18 +91,32 @@ export function FigmaProjectComments({
       {!unavailableReason && threads.length > 0 ? (
         <ul className="space-y-3">
           {threads.map((thread) => (
-            <li key={thread.root.id} className="rounded-lg border bg-card p-3">
+            <li
+              key={thread.root.id}
+              className={cn(
+                "rounded-lg border bg-card p-3",
+                selectedId === thread.root.id && "border-foreground/30 bg-accent/50 ring-2 ring-ring",
+              )}
+            >
               <CommentBlock
                 authorLabel={thread.root.authorLabel}
                 createdAt={thread.root.createdAt}
                 body={thread.root.body}
                 url={thread.root.url}
                 resolvedAt={thread.root.resolvedAt}
+                selected={selectedId === thread.root.id}
+                onSelect={onSelect ? () => onSelect(thread.root.id) : undefined}
               />
               {thread.replies.length > 0 ? (
                 <ul className="mt-3 space-y-3 border-l border-border/70 pl-3">
                   {thread.replies.map((reply) => (
-                    <li key={reply.id}>
+                    <li
+                      key={reply.id}
+                      className={cn(
+                        "rounded-md",
+                        selectedId === reply.id && "bg-accent/50 ring-2 ring-ring",
+                      )}
+                    >
                       <CommentBlock
                         authorLabel={reply.authorLabel}
                         createdAt={reply.createdAt}
@@ -106,6 +124,8 @@ export function FigmaProjectComments({
                         url={reply.url}
                         resolvedAt={reply.resolvedAt}
                         compact
+                        selected={selectedId === reply.id}
+                        onSelect={onSelect ? () => onSelect(reply.id) : undefined}
                       />
                     </li>
                   ))}
@@ -187,6 +207,8 @@ function CommentBlock({
   url,
   resolvedAt,
   compact = false,
+  selected = false,
+  onSelect,
 }: {
   authorLabel: string;
   createdAt: string;
@@ -194,6 +216,8 @@ function CommentBlock({
   url: string | null;
   resolvedAt: string | null;
   compact?: boolean;
+  selected?: boolean;
+  onSelect?: () => void;
 }) {
   return (
     <div className="flex gap-3">
@@ -222,7 +246,19 @@ function CommentBlock({
             </a>
           ) : null}
         </div>
-        <p className="mt-1.5 whitespace-pre-wrap text-sm leading-relaxed">{body}</p>
+        {onSelect ? (
+          <Button
+            type="button"
+            variant="ghost"
+            aria-pressed={selected}
+            onClick={onSelect}
+            className="mt-1 h-auto w-full justify-start whitespace-normal rounded-md px-1.5 py-1 text-left font-normal"
+          >
+            <span className="whitespace-pre-wrap text-sm leading-relaxed">{body}</span>
+          </Button>
+        ) : (
+          <p className="mt-1.5 whitespace-pre-wrap text-sm leading-relaxed">{body}</p>
+        )}
       </div>
     </div>
   );
