@@ -1,7 +1,7 @@
 import { isGithubAppConfigured } from "./github-app";
 import { oauthAppOverview, type OAuthAppOverview } from "./oauth-apps";
 import { listAdapterProviders } from "./registry";
-import { CHAT_PROVIDERS, NOTE_PROVIDERS } from "./types";
+import { CHAT_PROVIDERS, DESIGN_PROVIDERS, NOTE_PROVIDERS } from "./types";
 import type { OAuthProvider } from "@/lib/oauth-providers";
 
 // The providers a user can connect, whether each one can use OAuth in this
@@ -19,6 +19,7 @@ export async function providerCatalog(
     ...listAdapterProviders().filter((provider) => provider !== "fake"),
     ...CHAT_PROVIDERS,
     ...NOTE_PROVIDERS,
+    ...DESIGN_PROVIDERS,
   ];
   const overview = await oauthAppOverview(userId, workspaceId);
   const githubApp = isGithubAppConfigured();

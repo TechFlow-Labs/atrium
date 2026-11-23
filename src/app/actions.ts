@@ -40,6 +40,7 @@ import {
   groupProducts,
   updateProduct,
 } from "@/server/products/service";
+import { addProjectFigmaComment } from "@/server/projects/figma-comments";
 import { addTaskComment } from "@/server/tasks/comments";
 import { addTaskLink, removeTaskLink, searchTasksForLink } from "@/server/tasks/links";
 import { loadProductsPanel, type ProductsPanelFilter } from "@/server/products/panel";
@@ -483,6 +484,7 @@ export async function updateProjectSettingsAction(
       nickname: formData.has("nickname") ? String(formData.get("nickname") ?? "") : undefined,
       description: formData.has("description") ? String(formData.get("description") ?? "") : undefined,
       productId: formData.has("productId") ? String(formData.get("productId") ?? "") || null : undefined,
+      figmaFileUrl: formData.has("figmaFileUrl") ? String(formData.get("figmaFileUrl") ?? "") : undefined,
     });
     if (formData.has("providerProjectId")) {
       const providerProjectId = String(formData.get("providerProjectId") ?? "").trim();
@@ -794,6 +796,23 @@ export async function addTaskCommentAction(_state: ActionState, formData: FormDa
     return { error: error instanceof Error ? error.message : "Could not add the comment" };
   }
   revalidateConsoleData([`/tasks/${taskId}`, ...(returnTo.startsWith("/") ? [returnTo] : [])]);
+  redirect(returnTo);
+}
+
+export async function addFigmaCommentAction(_state: ActionState, formData: FormData): Promise<ActionState> {
+  const workspaceId = String(formData.get("workspaceId") ?? "");
+  const projectId = String(formData.get("projectId") ?? "");
+  const returnTo = String(formData.get("returnTo") ?? `/projects/${projectId}`);
+  try {
+    await addProjectFigmaComment(await userId(), workspaceId, projectId, {
+      body: String(formData.get("body") ?? ""),
+      parentCommentId: String(formData.get("parentCommentId") ?? "") || null,
+    });
+  } catch (error) {
+    unstable_rethrow(error);
+    return { error: error instanceof Error ? error.message : "Could not add the Figma comment" };
+  }
+  revalidateConsoleData([`/projects/${projectId}`, ...(returnTo.startsWith("/") ? [returnTo] : [])]);
   redirect(returnTo);
 }
 

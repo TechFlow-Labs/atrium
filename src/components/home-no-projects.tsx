@@ -267,7 +267,11 @@ export function HomeNoProjects({
                     <input type="hidden" name="workspaceId" value={workspaceId} />
                     <input type="hidden" name="provider" value={selected} />
                     <Button type="submit" className="w-full">
-                      {selected === "slack" ? "Add to Slack" : `Continue with ${providerLabel(selected)}`}
+                      {selected === "slack"
+                        ? "Add to Slack"
+                        : selected === "figma"
+                          ? "Continue with Figma"
+                          : `Continue with ${providerLabel(selected)}`}
                     </Button>
                   </form>
                   <div className="flex items-center gap-3 text-xs uppercase tracking-[0.14em] text-muted">

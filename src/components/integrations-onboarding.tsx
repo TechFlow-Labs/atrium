@@ -45,6 +45,7 @@ const COPY: Record<string, string> = {
   gitea: "Sync Gitea issues from repositories you choose.",
   slack: "Add Atrium to a Slack workspace and read today's channel messages on Chats.",
   obsidian: "Browse markdown from a LiveSync vault — locally on this host, or remotely via the vault bridge HTTPS URL.",
+  figma: "Connect Figma, link a file on each project, view the embed, and read or write design comments.",
 };
 
 export function IntegrationsOnboarding({
@@ -108,7 +109,9 @@ export function IntegrationsOnboarding({
                         ? "/chats"
                         : integration.provider === "obsidian"
                           ? "/notes"
-                          : `/integrations/${integration.id}`
+                          : integration.provider === "figma"
+                            ? "/integrations"
+                            : `/integrations/${integration.id}`
                     }
                     className="flex min-w-0 flex-1 items-center gap-3"
                   >
@@ -119,6 +122,7 @@ export function IntegrationsOnboarding({
                         {providerLabel(integration.provider)}
                         {integration.provider === "slack" ? " · chats" : ""}
                         {integration.provider === "obsidian" ? " · notes" : ""}
+                        {integration.provider === "figma" ? " · design" : ""}
                         {integration.external_account_id ? ` · ${integration.external_account_id}` : ""}
                         {integration.hasCredential ? " · secret stored" : " · secret removed"}
                       </p>
@@ -205,6 +209,8 @@ export function IntegrationsOnboarding({
                         ? `Add the ${providerLabel(selected)} OAuth app once. It is saved to this workspace and used from now on.`
                         : selected === "slack"
                         ? "Choose a Slack workspace. Atrium installs there and stores the bot token for you. Invite the app to each channel you want on Chats."
+                        : selected === "figma"
+                        ? "Authorize Figma, then link a file URL from each project's Manage dialog to show the embed and design comments."
                         : selected === "obsidian"
                           ? "If the vault lives on another VPS, deploy services/obsidian-vault-bridge there and paste its HTTPS URL. Same host: use the LiveSync mirror path under OBSIDIAN_VAULT_ROOT (for example /root/vaults/THEVAULT)."
                           : oauth[selected]
@@ -250,7 +256,11 @@ export function IntegrationsOnboarding({
                         <input type="hidden" name="workspaceId" value={workspaceId} />
                         <input type="hidden" name="provider" value={selected} />
                         <Button type="submit" className="w-full">
-                          {selected === "slack" ? "Add to Slack" : `Continue with ${providerLabel(selected)}`}
+                          {selected === "slack"
+                            ? "Add to Slack"
+                            : selected === "figma"
+                              ? "Continue with Figma"
+                              : `Continue with ${providerLabel(selected)}`}
                         </Button>
                       </form>
                       <div className="flex items-center gap-3 text-xs uppercase tracking-[0.14em] text-muted">

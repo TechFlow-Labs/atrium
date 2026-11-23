@@ -14,9 +14,13 @@ import { ScreenLoader } from "@/components/screen-loader";
 import { connection } from "next/server";
 import { notFound, redirect } from "next/navigation";
 import { archiveProjectAction, createMilestoneAction, createTaskAction } from "@/app/actions";
+import { FigmaProjectComments } from "@/components/figma-project-comments";
+import { FigmaProjectEmbed } from "@/components/figma-project-embed";
 import { ProjectDeleteDialog } from "@/components/project-delete-dialog";
 import { ProjectManageDialog } from "@/components/project-manage-dialog";
 import { OpenInProviderButton, ProviderIcon } from "@/components/provider-icon";
+import { figmaEmbedUrl } from "@/server/integrations/figma";
+import { listProjectFigmaComments } from "@/server/projects/figma-comments";
 import {
   buildProjectDashboardStats,
   ProjectStatCard,
@@ -60,10 +64,11 @@ async function ProjectContent({ params }: { params: Promise<{ projectId: string 
   const { current } = await workspaceContext(user.id);
   const project = await getProject(user.id, current.id, projectId);
   if (!project) notFound();
-  const [tasks, milestones, products] = await Promise.all([
+  const [tasks, milestones, products, figmaComments] = await Promise.all([
     listTasks(user.id, current.id, { projectId }),
     listMilestones(user.id, current.id, projectId),
     listProducts(user.id, current.id, { status: "active" }),
+    listProjectFigmaComments(user.id, current.id, projectId),
   ]);
   const records = await withUser(user.id, (tx) => tx.execute(sql`
     select entity_type, provider_id, raw from external_records
@@ -158,6 +163,9 @@ async function ProjectContent({ params }: { params: Promise<{ projectId: string 
             {project.provider === "github" && githubProjectUrl ? (
               <OpenInProviderButton provider="github" href={githubProjectUrl} label="Open project" />
             ) : null}
+            {project.figma_file_url ? (
+              <OpenInProviderButton provider="figma" href={project.figma_file_url} label="Edit in Figma" />
+            ) : null}
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -192,6 +200,8 @@ async function ProjectContent({ params }: { params: Promise<{ projectId: string 
                   provider_project_url: project.provider_project_url,
                   integration_id: project.integration_id,
                   publish_outbound: Boolean(project.publish_outbound),
+                  figma_file_url: project.figma_file_url,
+                  figma_file_name: project.figma_file_name,
                 }}
                 products={products.map((product) => ({ id: product.id, name: product.name }))}
                 mappings={map}
@@ -283,6 +293,37 @@ async function ProjectContent({ params }: { params: Promise<{ projectId: string 
           iconClassName="text-emerald-500"
         />
       </section>
+
+      {project.figma_file_key && project.figma_file_url ? (
+        <section className="grid gap-4 xl:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]">
+          <FigmaProjectEmbed
+            fileName={project.figma_file_name}
+            editUrl={project.figma_file_url}
+            embedUrl={
+              figmaComments.embedUrl ??
+              figmaEmbedUrl(
+                project.figma_file_key,
+                project.figma_embed_kind === "board" ||
+                  project.figma_embed_kind === "proto" ||
+                  project.figma_embed_kind === "file"
+                  ? project.figma_embed_kind
+                  : "design",
+              )
+            }
+          />
+          <div className="rounded-xl border bg-card p-4">
+            <FigmaProjectComments
+              workspaceId={current.id}
+              projectId={project.id}
+              threads={figmaComments.threads}
+              canComment={figmaComments.canComment}
+              canWrite={canWrite}
+              unavailableReason={figmaComments.unavailableReason}
+              currentUserName={user.name}
+            />
+          </div>
+        </section>
+      ) : null}
 
       <section className="grid gap-4 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]">
         <ProjectStatusBreakdown stats={stats} />

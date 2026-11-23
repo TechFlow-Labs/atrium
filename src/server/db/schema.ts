@@ -123,6 +123,10 @@ export const projects = pgTable("projects", {
   description: text("description").notNull().default(""),
   status: text("status").$type<"active" | "archived">().notNull().default("active"),
   ownershipMode: text("ownership_mode").$type<"native" | "external" | "hybrid">().notNull(),
+  figmaFileKey: text("figma_file_key"),
+  figmaFileName: text("figma_file_name"),
+  figmaFileUrl: text("figma_file_url"),
+  figmaEmbedKind: text("figma_embed_kind").$type<"design" | "board" | "proto" | "file" | null>(),
   createdBy: text("created_by").notNull(),
   archivedAt: timestamp("archived_at", { withTimezone: true, mode: "date" }),
   createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
@@ -173,7 +177,7 @@ export const integrations = pgTable("integrations", {
   id: uuid("id").primaryKey().defaultRandom(),
   workspaceId: uuid("workspace_id").notNull(),
   provider: text("provider")
-    .$type<"linear" | "jira" | "github" | "gitlab" | "gitea" | "fake" | "slack" | "obsidian">()
+    .$type<"linear" | "jira" | "github" | "gitlab" | "gitea" | "fake" | "slack" | "obsidian" | "figma">()
     .notNull(),
   status: text("status").$type<"connected" | "error" | "revoked">().notNull(),
   displayName: text("display_name").notNull(),

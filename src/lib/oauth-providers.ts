@@ -1,6 +1,6 @@
 // Providers that use OAuth. Shared by the server and the client, so keep this
 // file free of server-only imports.
-export const OAUTH_PROVIDERS = ["linear", "jira", "github", "gitlab", "gitea", "slack"] as const;
+export const OAUTH_PROVIDERS = ["linear", "jira", "github", "gitlab", "gitea", "slack", "figma"] as const;
 
 export type OAuthProvider = (typeof OAUTH_PROVIDERS)[number];
 
@@ -11,6 +11,7 @@ export const OAUTH_PROVIDER_LABELS: Record<OAuthProvider, string> = {
   gitlab: "GitLab",
   gitea: "Gitea",
   slack: "Slack",
+  figma: "Figma",
 };
 
 export function isOAuthProvider(value: string): value is OAuthProvider {

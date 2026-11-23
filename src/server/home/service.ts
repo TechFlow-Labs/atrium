@@ -3,12 +3,18 @@ import { requireAction } from "../authz/membership";
 import { withUser } from "../db/client";
 import { textArray } from "../db/sql";
 import { areDevMocksVisible, sqlDevMockProjectVisible, sqlDevMockTaskVisible } from "../dev/mock-data";
-import { CHAT_PROVIDERS, NOTE_PROVIDERS, PROVIDERS, type ProviderId } from "../integrations/types";
+import {
+  CHAT_PROVIDERS,
+  DESIGN_PROVIDERS,
+  NOTE_PROVIDERS,
+  PROVIDERS,
+  type ProviderId,
+} from "../integrations/types";
 
 const STALE_MS = 15 * 60 * 1000;
 
 const PROVIDER_SOURCES = new Set<string>(PROVIDERS.filter((provider) => provider !== "fake"));
-const NON_TASK_PROVIDER_SQL = textArray([...CHAT_PROVIDERS, ...NOTE_PROVIDERS]);
+const NON_TASK_PROVIDER_SQL = textArray([...CHAT_PROVIDERS, ...NOTE_PROVIDERS, ...DESIGN_PROVIDERS]);
 
 export type HomeSource = "" | "atrium" | ProviderId;
 

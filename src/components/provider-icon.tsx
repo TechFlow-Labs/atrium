@@ -10,6 +10,7 @@ const LABELS: Record<string, string> = {
   gitea: "Gitea",
   slack: "Slack",
   obsidian: "Obsidian",
+  figma: "Figma",
   fake: "Fake provider",
   native: "Native",
 };
@@ -192,6 +193,18 @@ function ObsidianMark({ className }: { className?: string }) {
   );
 }
 
+function FigmaMark({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 38 57" className={className} aria-hidden="true">
+      <path fill="#1ABCFE" d="M19 28.5a9.5 9.5 0 1 1 19 0 9.5 9.5 0 0 1-19 0Z" />
+      <path fill="#0ACF83" d="M0 47.5A9.5 9.5 0 0 1 9.5 38H19v9.5a9.5 9.5 0 1 1-19 0Z" />
+      <path fill="#FF7262" d="M19 0v19h9.5a9.5 9.5 0 1 0 0-19H19Z" />
+      <path fill="#F24E1E" d="M0 9.5A9.5 9.5 0 0 0 9.5 19H19V0H9.5A9.5 9.5 0 0 0 0 9.5Z" />
+      <path fill="#A259FF" d="M0 28.5A9.5 9.5 0 0 0 9.5 38H19V19H9.5A9.5 9.5 0 0 0 0 28.5Z" />
+    </svg>
+  );
+}
+
 const tones: Record<string, string> = {
   linear: "bg-[#5E6AD2]/10 text-[#5E6AD2] ring-1 ring-[#5E6AD2]/25",
   jira: "bg-[#2684FF]/10 text-[#2684FF] ring-1 ring-[#2684FF]/25",
@@ -200,6 +213,7 @@ const tones: Record<string, string> = {
   gitea: "bg-[#609926]/15 text-[#609926] ring-1 ring-[#609926]/35",
   slack: "bg-white ring-1 ring-black/10 dark:bg-white/10 dark:ring-white/15",
   obsidian: "bg-[#6C31E3]/20 ring-1 ring-[#6C31E3]/45 dark:bg-[#6C31E3]/30 dark:ring-[#A78BFA]/45",
+  figma: "bg-[#1E1E1E] text-white ring-1 ring-black/20 dark:bg-[#2C2C2C] dark:ring-white/15",
   fake: "bg-amber-50 text-amber-900 ring-1 ring-amber-200 dark:bg-amber-500/15 dark:text-amber-100 dark:ring-amber-400/30",
   native: "bg-emerald-50 text-emerald-900 ring-1 ring-emerald-200 dark:bg-emerald-500/15 dark:text-emerald-100 dark:ring-emerald-400/30",
 };
@@ -244,6 +258,11 @@ export const providerAccents: Record<
     wash: "bg-[#6C31E3]/12 dark:bg-[#6C31E3]/20",
     ink: "text-[#6C31E3] dark:text-[#C4B5FD]",
   },
+  figma: {
+    bar: "bg-[#F24E1E]",
+    wash: "bg-[#F24E1E]/12 dark:bg-[#F24E1E]/18",
+    ink: "text-[#F24E1E] dark:text-[#ff8f6b]",
+  },
   fake: {
     bar: "bg-amber-600",
     wash: "bg-amber-500/12 dark:bg-amber-500/18",
@@ -280,6 +299,7 @@ function ProviderMark({
   if (provider === "gitea") return <GiteaMark className={className} />;
   if (provider === "slack") return <SlackMark className={className} />;
   if (provider === "obsidian") return <ObsidianMark className={className} />;
+  if (provider === "figma") return <FigmaMark className={className} />;
   if (provider === "fake") return <FakeMark className={className} />;
   return <NativeMark className={className} />;
 }

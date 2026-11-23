@@ -31,6 +31,7 @@ async function Detail({ params }: { params: Promise<{ integrationId: string }> }
   if (!integration) notFound();
   if (integration.provider === "slack") redirect("/chats");
   if (integration.provider === "obsidian") redirect("/notes");
+  if (integration.provider === "figma") redirect("/integrations");
   const canAdmin = current.role === "owner" || current.role === "admin";
   let projects: Awaited<ReturnType<typeof listRemoteProjects>> = [];
   let loadError: string | null = null;

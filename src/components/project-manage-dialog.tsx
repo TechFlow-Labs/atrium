@@ -63,6 +63,8 @@ export function ProjectManageDialog({
     provider_project_url: string | null;
     integration_id: string | null;
     publish_outbound: boolean;
+    figma_file_url: string | null;
+    figma_file_name: string | null;
   };
   products: Array<{ id: string; name: string }>;
   mappings: FieldMappings | null | undefined;
@@ -270,6 +272,21 @@ export function ProjectManageDialog({
                 defaultValue={project.description}
                 className="mt-1"
               />
+            </div>
+            <div className="md:col-span-2">
+              <Label htmlFor="manage-figma">Figma file</Label>
+              <Input
+                id="manage-figma"
+                name="figmaFileUrl"
+                defaultValue={project.figma_file_url ?? ""}
+                placeholder="https://www.figma.com/design/…"
+                className="mt-1"
+              />
+              <p className="mt-1 text-xs text-muted">
+                {project.figma_file_name
+                  ? `Linked: ${project.figma_file_name}. Clear the field and save to remove.`
+                  : "Paste a Figma design, board, or prototype URL. Connect Figma under Integrations for comments."}
+              </p>
             </div>
             {products.length > 0 ? (
               <div className="md:col-span-2">

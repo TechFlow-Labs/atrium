@@ -11,7 +11,11 @@ export type ChatProviderId = (typeof CHAT_PROVIDERS)[number];
 export const NOTE_PROVIDERS = ["obsidian"] as const;
 export type NoteProviderId = (typeof NOTE_PROVIDERS)[number];
 
-export type IntegrationProviderId = ProviderId | ChatProviderId | NoteProviderId;
+/** Design-only providers stored on integrations but not task adapters. */
+export const DESIGN_PROVIDERS = ["figma"] as const;
+export type DesignProviderId = (typeof DESIGN_PROVIDERS)[number];
+
+export type IntegrationProviderId = ProviderId | ChatProviderId | NoteProviderId | DesignProviderId;
 
 export function isChatProvider(provider: string): provider is ChatProviderId {
   return (CHAT_PROVIDERS as readonly string[]).includes(provider);
@@ -21,8 +25,14 @@ export function isNoteProvider(provider: string): provider is NoteProviderId {
   return (NOTE_PROVIDERS as readonly string[]).includes(provider);
 }
 
-export function isNonTaskProvider(provider: string): provider is ChatProviderId | NoteProviderId {
-  return isChatProvider(provider) || isNoteProvider(provider);
+export function isDesignProvider(provider: string): provider is DesignProviderId {
+  return (DESIGN_PROVIDERS as readonly string[]).includes(provider);
+}
+
+export function isNonTaskProvider(
+  provider: string,
+): provider is ChatProviderId | NoteProviderId | DesignProviderId {
+  return isChatProvider(provider) || isNoteProvider(provider) || isDesignProvider(provider);
 }
 
 export function isTaskProvider(provider: string): provider is ProviderId {

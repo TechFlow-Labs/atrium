@@ -148,6 +148,27 @@ const OBSIDIAN_NOTES: IntegrationGuide = {
   ],
 };
 
+const FIGMA_OAUTH: IntegrationGuide = {
+  provider: "figma",
+  title: "Figma",
+  needs: [
+    "A Figma account that can open the files you want on project pages.",
+    "A Figma OAuth app with a client ID and client secret.",
+  ],
+  steps: [
+    "Open developers.figma.com/apps (or Figma → Settings → Apps), then create an OAuth app named Atrium.",
+    "Add this callback URL: {callbackUrl}",
+    "Request scopes current_user:read, file_comments:read, file_comments:write, and file_metadata:read.",
+    "Copy the Client ID and Client Secret into the Figma fields in Atrium (or set FIGMA_CLIENT_ID and FIGMA_CLIENT_SECRET on the server).",
+    "In Atrium, choose Continue with Figma and authorize access.",
+    "Open a project → Manage, paste a Figma file URL, then use the embed, Edit in Figma, and Design comments on the project page.",
+  ],
+  notes: [
+    "The embed is view-only. Full editing opens in a new Figma tab.",
+    "You can still paste a Figma personal access token as a fallback.",
+  ],
+};
+
 export const INTEGRATION_GUIDES: Record<string, IntegrationGuide> = {
   linear: LINEAR_OAUTH,
   jira: JIRA_OAUTH,
@@ -156,6 +177,7 @@ export const INTEGRATION_GUIDES: Record<string, IntegrationGuide> = {
   gitea: GITEA_OAUTH,
   slack: SLACK_OAUTH,
   obsidian: OBSIDIAN_NOTES,
+  figma: FIGMA_OAUTH,
 };
 
 export function integrationGuide(provider: string): IntegrationGuide | null {

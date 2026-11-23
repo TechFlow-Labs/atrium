@@ -1,6 +1,6 @@
 # Provider OAuth setup
 
-Atrium can connect Linear, Jira Cloud, GitLab, Gitea, and Slack through each provider’s authorize screen. GitHub uses a **GitHub App** (installation tokens that refresh automatically). Without OAuth or App credentials, admins can still paste a personal access token or, for Slack, a bot token.
+Atrium can connect Linear, Jira Cloud, GitLab, Gitea, Slack, and Figma through each provider’s authorize screen. GitHub uses a **GitHub App** (installation tokens that refresh automatically). Without OAuth or App credentials, admins can still paste a personal access token or, for Slack, a bot token.
 
 OAuth is enabled per provider when both env vars are set:
 
@@ -137,13 +137,26 @@ SLACK_CLIENT_SECRET=...
 
 Integrations then shows **Add to Slack**. After install, invite the app to each channel with `/invite @Atrium`. A pasted `xoxb-` token still works.
 
+## Figma
+
+1. Create an OAuth app at [developers.figma.com](https://developers.figma.com/docs/rest-api/oauth-apps/).
+2. Callback: `{BETTER_AUTH_URL}/api/integrations/oauth/figma/callback`.
+3. Scopes: `current_user:read`, `file_comments:read`, `file_comments:write`, `file_metadata:read`.
+
+```bash
+FIGMA_CLIENT_ID=...
+FIGMA_CLIENT_SECRET=...
+```
+
+Integrations then shows **Continue with Figma**. Link a file URL from each project’s Manage dialog for the view-only embed, Edit in Figma, and design comments. A pasted personal access token still works.
+
 ## Local checklist
 
 1. `BETTER_AUTH_URL` matches the browser origin (`http://127.0.0.1:38471` for `pnpm dev`).
 2. For GitHub App: Client ID, private key, slug, and webhook secret are set; Setup and Webhook URLs match `BETTER_AUTH_URL`.
 3. For other providers: callback URLs in the provider consoles match `pnpm oauth:redirects` exactly.
 4. Env is loaded and the app (and worker, in production) was restarted.
-5. On **Integrations**, GitHub shows **Install GitHub App** when App env is configured; Slack shows **Add to Slack**; other providers show **Continue with …** when OAuth is configured.
+5. On **Integrations**, GitHub shows **Install GitHub App** when App env is configured; Slack shows **Add to Slack**; Figma and other providers show **Continue with …** when OAuth is configured.
 
 ## Troubleshooting
 

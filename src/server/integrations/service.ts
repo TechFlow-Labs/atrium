@@ -12,6 +12,11 @@ import { seedFakeProject } from "./fake";
 import { normalizeLinearToken } from "./linear";
 import { getAdapter, OAUTH_SCOPES } from "./registry";
 import { validateObsidianConnection } from "./obsidian";
+import {
+  exchangeFigmaCode,
+  FIGMA_OAUTH_SCOPES,
+  validateFigmaConnection,
+} from "./figma";
 import { exchangeSlackCode, SLACK_BOT_SCOPES, validateSlackConnection } from "./slack";
 import { ensureFreshCredentials } from "./token-refresh";
 import { isOAuthProvider, type OAuthProvider } from "@/lib/oauth-providers";
@@ -22,7 +27,13 @@ import type {
   RemoteProject,
   StoredCredential,
 } from "./types";
-import { isChatProvider, isNonTaskProvider, isNoteProvider, isTaskProvider } from "./types";
+import {
+  isChatProvider,
+  isDesignProvider,
+  isNonTaskProvider,
+  isNoteProvider,
+  isTaskProvider,
+} from "./types";
 
 export type IntegrationView = {
   id: string;
@@ -40,7 +51,7 @@ export type IntegrationView = {
 const SECRET_FREE = sql`id, workspace_id, provider, status, display_name, external_account_id, last_validated_at, last_error, revoked_at, credential_ciphertext`;
 
 function parseProvider(provider: string): IntegrationProviderId {
-  if (isChatProvider(provider) || isNoteProvider(provider)) return provider;
+  if (isChatProvider(provider) || isNoteProvider(provider) || isDesignProvider(provider)) return provider;
   if (!isTaskProvider(provider)) {
     throw new Error("Unknown provider");
   }
@@ -98,6 +109,9 @@ async function adapterContext(tx: Tx, integrationId: string) {
   }
   if (isNoteProvider(row.provider)) {
     throw new Error("Obsidian is a notes connection. Open Notes instead of linking projects.");
+  }
+  if (isDesignProvider(row.provider)) {
+    throw new Error("Figma is a design connection. Link a file from the project Manage dialog.");
   }
   const provider = row.provider;
   if (!isTaskProvider(provider)) {
@@ -166,6 +180,9 @@ export async function connectWithToken(
     if (isChatProvider(provider)) {
       validated = await validateSlackConnection(token);
       scopes = textArray([...SLACK_BOT_SCOPES]);
+    } else if (isDesignProvider(provider)) {
+      validated = await validateFigmaConnection(token);
+      scopes = textArray([...FIGMA_OAUTH_SCOPES]);
     } else if (isNoteProvider(provider)) {
       validated = await validateObsidianConnection(token, credential.siteUrl);
       scopes = textArray(["vault:read"]);
@@ -362,6 +379,10 @@ export async function testIntegration(userId: string, workspaceId: string, integ
         const credentials = openCredential(row.credential_ciphertext);
         if (!credentials) throw new Error("This integration is disconnected");
         result = await validateSlackConnection(credentials.accessToken);
+      } else if (isDesignProvider(row.provider)) {
+        const credentials = openCredential(row.credential_ciphertext);
+        if (!credentials) throw new Error("This integration is disconnected");
+        result = await validateFigmaConnection(credentials.accessToken);
       } else if (isNoteProvider(row.provider)) {
         const credentials = openCredential(row.credential_ciphertext);
         if (!credentials) throw new Error("This integration is disconnected");
@@ -472,7 +493,9 @@ export async function createExternalProject(
       throw new Error(
         isNoteProvider(integration.provider)
           ? "Obsidian connections cannot link task projects"
-          : "Slack connections cannot link task projects",
+          : isDesignProvider(integration.provider)
+            ? "Figma connections cannot link task projects. Assign a file from the project Manage dialog."
+            : "Slack connections cannot link task projects",
       );
     }
     const { resolveProductId } = await import("../products/service");
@@ -971,6 +994,15 @@ export async function beginOAuth(userId: string, workspaceId: string, provider: 
     url.searchParams.set("state", state);
     return url.toString();
   }
+  if (provider === "figma") {
+    const url = new URL("https://www.figma.com/oauth");
+    url.searchParams.set("client_id", clientId);
+    url.searchParams.set("redirect_uri", redirectUri);
+    url.searchParams.set("scope", FIGMA_OAUTH_SCOPES.join(","));
+    url.searchParams.set("state", state);
+    url.searchParams.set("response_type", "code");
+    return url.toString();
+  }
   throw new Error(`OAuth is not supported for ${provider}`);
 }
 
@@ -1112,6 +1144,14 @@ async function exchangeCode(
       clientSecret: input.clientSecret,
     });
   }
+  if (provider === "figma") {
+    return exchangeFigmaCode({
+      code: input.code,
+      redirectUri: input.redirectUri,
+      clientId: input.clientId,
+      clientSecret: input.clientSecret,
+    });
+  }
   if (provider !== "jira") {
     throw new Error(`OAuth token exchange is not supported for ${provider}`);
   }
@@ -1154,13 +1194,20 @@ async function connectInside(
   const validated =
     provider === "slack"
       ? await validateSlackConnection(credential.accessToken)
-      : await getAdapter(provider).validateConnection({
-          tx,
-          integrationId: "00000000-0000-4000-8000-000000000000",
-          credentials: credential,
-          mappings: getAdapter(provider).defaultMappings(),
-        });
-  const scopes = provider === "slack" ? [...SLACK_BOT_SCOPES] : OAUTH_SCOPES[provider];
+      : provider === "figma"
+        ? await validateFigmaConnection(credential.accessToken)
+        : await getAdapter(provider).validateConnection({
+            tx,
+            integrationId: "00000000-0000-4000-8000-000000000000",
+            credentials: credential,
+            mappings: getAdapter(provider).defaultMappings(),
+          });
+  const scopes =
+    provider === "slack"
+      ? [...SLACK_BOT_SCOPES]
+      : provider === "figma"
+        ? [...FIGMA_OAUTH_SCOPES]
+        : OAUTH_SCOPES[provider];
   const rows = await tx.execute<{ id: string }>(sql`
     insert into integrations (
       workspace_id, provider, status, display_name, external_account_id, credential_ciphertext,

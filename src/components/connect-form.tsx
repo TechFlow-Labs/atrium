@@ -22,6 +22,8 @@ function providerLabel(provider: string): string {
       return "Slack";
     case "obsidian":
       return "Obsidian";
+    case "figma":
+      return "Figma";
     default:
       return provider;
   }
@@ -46,8 +48,9 @@ export function ConnectForm({
   const showGitea = selected === "gitea";
   const showSlack = selected === "slack";
   const showObsidian = selected === "obsidian";
+  const showFigma = selected === "figma";
   const showSiteUrl = selected === "gitlab" || showGitea || showObsidian;
-  const showWebhook = !showSlack && !showObsidian;
+  const showWebhook = !showSlack && !showObsidian && !showFigma;
   return (
     <form action={formAction} className={compact ? "space-y-3" : "rounded-lg border bg-card p-4"}>
       {!compact ? (
@@ -99,6 +102,8 @@ export function ConnectForm({
                     ? "Personal access token"
                     : selected === "slack"
                       ? "xoxb-…"
+                      : selected === "figma"
+                        ? "figd_… or OAuth access token"
                       : selected === "obsidian"
                         ? "Any secret (8+ chars)"
                         : "Paste access token"
@@ -113,6 +118,10 @@ export function ConnectForm({
           ) : selected === "slack" ? (
             <p className="mt-1 text-xs text-muted">
               Optional if you use Add to Slack. Paste an existing bot token (xoxb-), then invite the app to each channel you want on Chats.
+            </p>
+          ) : selected === "figma" ? (
+            <p className="mt-1 text-xs text-muted">
+              Optional if you use Continue with Figma. Paste a personal access token with comment read/write scopes.
             </p>
           ) : selected === "obsidian" ? (
             <p className="mt-1 text-xs text-muted">

@@ -13,6 +13,9 @@ const EXACT_HOSTS = new Set([
   "api.slack.com",
   "slack.com",
   "app.slack.com",
+  "api.figma.com",
+  "www.figma.com",
+  "figma.com",
 ]);
 
 export type DnsResolver = (hostname: string) => Promise<string[]>;

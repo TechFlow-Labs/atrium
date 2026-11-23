@@ -4,7 +4,7 @@ import { fillCallback, INTEGRATION_GUIDES } from "@/lib/integration-guides";
 
 describe("integration guides", () => {
   it("has a guide for every OAuth provider and every token provider in the UI", () => {
-    for (const provider of [...OAUTH_PROVIDERS, "slack", "obsidian"]) {
+    for (const provider of [...OAUTH_PROVIDERS, "obsidian"]) {
       expect(INTEGRATION_GUIDES[provider], provider).toBeDefined();
     }
   });

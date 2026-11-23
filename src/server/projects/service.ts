@@ -15,6 +15,10 @@ export type ProjectRecord = {
   description: string;
   status: "active" | "archived";
   ownership_mode: "native" | "external" | "hybrid";
+  figma_file_key: string | null;
+  figma_file_name: string | null;
+  figma_file_url: string | null;
+  figma_embed_kind: "design" | "board" | "proto" | "file" | null;
   archived_at: Date | null;
   created_at: Date;
   provider: string | null;
@@ -52,6 +56,7 @@ export async function listProjects(
     return tx.execute<ProjectRecord>(sql`
       select p.id, p.workspace_id, p.product_id, prod.name as product_name,
              p.name, p.nickname, p.description, p.status, p.ownership_mode,
+             p.figma_file_key, p.figma_file_name, p.figma_file_url, p.figma_embed_kind,
              p.archived_at, p.created_at,
              i.provider, c.provider_project_name, c.provider_project_url, c.provider_project_id,
              nullif(nullif(c.field_mappings->>'githubProjectNodeId', ''), 'none') as github_project_node_id,
@@ -267,6 +272,7 @@ export async function getProject(userId: string, workspaceId: string, projectId:
     const rows = await tx.execute<ProjectRecord>(sql`
       select p.id, p.workspace_id, p.product_id, prod.name as product_name,
              p.name, p.nickname, p.description, p.status, p.ownership_mode,
+             p.figma_file_key, p.figma_file_name, p.figma_file_url, p.figma_embed_kind,
              p.archived_at, p.created_at,
              i.provider, c.provider_project_name, c.provider_project_url, c.provider_project_id,
              nullif(nullif(c.field_mappings->>'githubProjectNodeId', ''), 'none') as github_project_node_id,
@@ -317,7 +323,14 @@ export async function updateProject(
   userId: string,
   workspaceId: string,
   projectId: string,
-  input: { name?: string; nickname?: string | null; description?: string; productId?: string | null },
+  input: {
+    name?: string;
+    nickname?: string | null;
+    description?: string;
+    productId?: string | null;
+    /** Pass empty string or null to clear. Omit to leave unchanged. */
+    figmaFileUrl?: string | null;
+  },
 ): Promise<void> {
   await withUser(userId, async (tx) => {
     await requireAction(tx, workspaceId, "project.update");
@@ -331,12 +344,78 @@ export async function updateProject(
     const productId = productProvided
       ? await resolveProductId(tx, workspaceId, input.productId)
       : null;
+
+    let figmaProvided = false;
+    let figmaKey: string | null = null;
+    let figmaName: string | null = null;
+    let figmaUrl: string | null = null;
+    let figmaKind: string | null = null;
+    if (input.figmaFileUrl !== undefined) {
+      figmaProvided = true;
+      const raw = (input.figmaFileUrl ?? "").trim();
+      if (raw) {
+        const { parseFigmaFileInput, getFigmaFileMeta } = await import("../integrations/figma");
+        const { openCredential, sealCredential } = await import("../integrations/credentials");
+        const { resolveOAuthApp } = await import("../integrations/oauth-apps");
+        const { refreshFigmaAccessToken } = await import("../integrations/figma");
+        const { credentialNeedsRefresh } = await import("../integrations/token-refresh");
+        const parsed = parseFigmaFileInput(raw);
+        figmaKey = parsed.fileKey;
+        figmaUrl = parsed.editUrl;
+        figmaKind = parsed.embedKind;
+        figmaName = parsed.fileKey;
+        const integrations = await tx.execute<{
+          id: string;
+          credential_ciphertext: string | null;
+        }>(sql`
+          select id, credential_ciphertext from integrations
+          where workspace_id = ${workspaceId}::uuid
+            and provider = 'figma'
+            and status = 'connected'
+            and credential_ciphertext is not null
+          order by last_validated_at desc nulls last, display_name
+          limit 1
+        `);
+        const integration = integrations[0];
+        if (integration?.credential_ciphertext) {
+          let credentials = openCredential(integration.credential_ciphertext);
+          if (credentials?.accessToken) {
+            try {
+              if (credentialNeedsRefresh(credentials)) {
+                const app = await resolveOAuthApp(tx, workspaceId, "figma");
+                if (app) {
+                  credentials = await refreshFigmaAccessToken(credentials, app);
+                  await tx.execute(sql`
+                    update integrations
+                    set credential_ciphertext = ${sealCredential(credentials)},
+                        last_error = null,
+                        status = 'connected',
+                        last_validated_at = now()
+                    where id = ${integration.id}::uuid
+                  `);
+                }
+              }
+              const meta = await getFigmaFileMeta(credentials.accessToken, parsed.fileKey);
+              figmaName = meta.name;
+            } catch {
+              // Keep the link even when metadata lookup fails (private file / expired token).
+            }
+          }
+        }
+      }
+    }
+
     const rows = await tx.execute(sql`
       update projects
       set name = coalesce(${name ?? null}, name),
           nickname = case when ${nicknameProvided} then ${nickname} else nickname end,
           description = coalesce(${input.description ?? null}, description),
-          product_id = case when ${productProvided} then ${productId}::uuid else product_id end
+          product_id = case when ${productProvided} then ${productId}::uuid else product_id end,
+          figma_file_key = case when ${figmaProvided} then ${figmaKey} else figma_file_key end,
+          figma_file_name = case when ${figmaProvided} then ${figmaName} else figma_file_name end,
+          figma_file_url = case when ${figmaProvided} then ${figmaUrl} else figma_file_url end,
+          figma_embed_kind = case when ${figmaProvided} then ${figmaKind} else figma_embed_kind end,
+          updated_at = now()
       where id = ${projectId}::uuid and workspace_id = ${workspaceId}::uuid
       returning id
     `);
