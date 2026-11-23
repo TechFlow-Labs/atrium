@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { AlertTriangle, ArrowRight } from "lucide-react";
+import { AlertTriangle, ArrowRight, Boxes } from "lucide-react";
 import { loadHomeFeedAction, type ActionState } from "@/app/actions";
 import { HomeActionsMenu } from "@/components/home-actions-menu";
 import { HomeNoProjects } from "@/components/home-no-projects";
@@ -48,6 +48,22 @@ export type HomeFeedPanel = {
     project_name: string;
     provider: string | null;
   }>;
+  products: Array<{
+    id: string;
+    name: string;
+    projects: number;
+    open: number;
+    inProgress: number;
+    doneWeek: number;
+    children: Array<{
+      id: string;
+      name: string;
+      projects: number;
+      open: number;
+      inProgress: number;
+      doneWeek: number;
+    }>;
+  }>;
 };
 
 type NoProjectsProps = {
@@ -75,6 +91,7 @@ function toHomeFeedPanel(feed: {
   priorities: Array<Record<string, unknown>>;
   dueSoon: Array<Record<string, unknown>>;
   blocked: Array<Record<string, unknown>>;
+  products?: HomeFeedPanel["products"];
 }): HomeFeedPanel {
   return {
     source: feed.source,
@@ -105,6 +122,7 @@ function toHomeFeedPanel(feed: {
       project_name: String(task.project_name),
       provider: (task.provider as string | null) ?? null,
     })),
+    products: feed.products ?? [],
   };
 }
 
@@ -171,7 +189,7 @@ export function HomePageClient({
             <h1 className="text-4xl">{workspaceName}</h1>
           </div>
           <p className="mt-2 max-w-2xl text-sm text-muted">
-            Workspace dashboard — open counts jump into filtered issue lists, schedule, projects, and sync.
+            Workspace dashboard — issue counts, product portfolio, schedule, and sync.
           </p>
         </div>
         <div className="flex flex-wrap items-center justify-end gap-2">
@@ -188,6 +206,7 @@ export function HomePageClient({
                 icon: "Columns3",
               },
               { href: "/schedule", label: "Schedule", icon: "CalendarRange" },
+              { href: "/products", label: "Products", icon: "FolderKanban" },
               { href: projectsHref, label: "Projects", icon: "FolderKanban" },
               { href: "/integrations", label: "Integrations", icon: "Plug" },
               { href: "/sync", label: "Sync", icon: "RefreshCw" },
@@ -245,6 +264,30 @@ export function HomePageClient({
             warn={staleCount > 0}
           />
         </section>
+
+        {feed.products.length > 0 ? (
+          <section className="space-y-3" data-tour="home-products">
+            <div className="flex flex-wrap items-end justify-between gap-2">
+              <div>
+                <h2 className="text-2xl">Products</h2>
+                <p className="mt-1 text-sm text-muted">
+                  Open work rolled up by product, including subproducts.
+                </p>
+              </div>
+              <Link href="/products" className="inline-flex items-center gap-1 text-sm font-medium hover:underline">
+                View all
+                <ArrowRight className="size-3.5" aria-hidden="true" />
+              </Link>
+            </div>
+            <ul className="grid gap-3 lg:grid-cols-2">
+              {feed.products.map((product) => (
+                <li key={product.id}>
+                  <ProductSummaryCard product={product} sourceQuery={sourceQuery} />
+                </li>
+              ))}
+            </ul>
+          </section>
+        ) : null}
 
         <section data-tour="home-panels" className="mb-8 grid gap-4 md:grid-cols-3 md:items-start">
           <Panel
@@ -321,6 +364,73 @@ export function HomePageClient({
           />
         ) : null}
       </div>
+    </div>
+  );
+}
+
+function ProductSummaryCard({
+  product,
+  sourceQuery,
+}: {
+  product: HomeFeedPanel["products"][number];
+  sourceQuery: string;
+}) {
+  const active = product.open + product.inProgress;
+  return (
+    <div className="rounded-xl border bg-card p-4">
+      <div className="flex items-start justify-between gap-3">
+        <Link href={`/products/${product.id}`} className="min-w-0 hover:underline">
+          <span className="flex items-center gap-2">
+            <Boxes className="size-4 shrink-0 text-teal-600 dark:text-teal-400" aria-hidden="true" />
+            <span className="text-lg font-medium">{product.name}</span>
+          </span>
+        </Link>
+        <p className="shrink-0 text-xs text-muted">
+          {product.projects} {product.projects === 1 ? "project" : "projects"}
+        </p>
+      </div>
+      <dl className="mt-3 grid grid-cols-3 gap-2 text-xs">
+        <div>
+          <dt className="text-muted">Open</dt>
+          <dd className="mt-0.5 text-lg font-medium tabular-nums">
+            <Link href={`/tasks?product=${encodeURIComponent(product.id)}&status=open${sourceQuery}`} className="hover:underline">
+              {product.open}
+            </Link>
+          </dd>
+        </div>
+        <div>
+          <dt className="text-muted">In progress</dt>
+          <dd className="mt-0.5 text-lg font-medium tabular-nums">
+            <Link href={`/tasks?product=${encodeURIComponent(product.id)}&status=in_progress${sourceQuery}`} className="hover:underline">
+              {product.inProgress}
+            </Link>
+          </dd>
+        </div>
+        <div>
+          <dt className="text-muted">Done this week</dt>
+          <dd className="mt-0.5 text-lg font-medium tabular-nums">{product.doneWeek}</dd>
+        </div>
+      </dl>
+      {product.children.length > 0 ? (
+        <ul className="mt-3 space-y-1.5 border-t border-border/70 pt-3">
+          {product.children.map((child) => (
+            <li key={child.id}>
+              <Link
+                href={`/products/${child.id}`}
+                className="flex items-center justify-between gap-3 rounded-md px-2 py-1.5 text-sm transition hover:bg-accent/50"
+              >
+                <span className="min-w-0 truncate">{child.name}</span>
+                <span className="shrink-0 tabular-nums text-xs text-muted">
+                  {child.open + child.inProgress} active · {child.projects}{" "}
+                  {child.projects === 1 ? "project" : "projects"}
+                </span>
+              </Link>
+            </li>
+          ))}
+        </ul>
+      ) : active === 0 && product.projects === 0 ? (
+        <p className="mt-3 text-xs text-muted">No active projects yet.</p>
+      ) : null}
     </div>
   );
 }

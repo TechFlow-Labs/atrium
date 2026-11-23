@@ -41,6 +41,7 @@ function toHomeFeedPanel(feed: Awaited<ReturnType<typeof homeFeed>>): HomeFeedPa
       project_name: String(task.project_name),
       provider: (task.provider as string | null) ?? null,
     })),
+    products: feed.products,
   };
 }
 

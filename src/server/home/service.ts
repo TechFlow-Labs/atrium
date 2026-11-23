@@ -12,6 +12,66 @@ const NON_TASK_PROVIDER_SQL = textArray([...CHAT_PROVIDERS, ...NOTE_PROVIDERS]);
 
 export type HomeSource = "" | "atrium" | ProviderId;
 
+export type HomeProductSummary = {
+  id: string;
+  name: string;
+  projects: number;
+  open: number;
+  inProgress: number;
+  doneWeek: number;
+  children: Array<Omit<HomeProductSummary, "children">>;
+};
+
+function nestHomeProducts(
+  rows: Array<{
+    id: string;
+    parent_id: string | null;
+    name: string;
+    project_count: number;
+    open_count: number;
+    in_progress_count: number;
+    done_week_count: number;
+  }>,
+): HomeProductSummary[] {
+  const toLeaf = (row: (typeof rows)[number]) => ({
+    id: row.id,
+    name: row.name,
+    projects: Number(row.project_count ?? 0),
+    open: Number(row.open_count ?? 0),
+    inProgress: Number(row.in_progress_count ?? 0),
+    doneWeek: Number(row.done_week_count ?? 0),
+  });
+  const childrenByParent = new Map<string, ReturnType<typeof toLeaf>[]>();
+  for (const row of rows) {
+    if (!row.parent_id) continue;
+    const list = childrenByParent.get(row.parent_id) ?? [];
+    list.push(toLeaf(row));
+    childrenByParent.set(row.parent_id, list);
+  }
+  return rows
+    .filter((row) => !row.parent_id)
+    .map((row) => {
+      const own = toLeaf(row);
+      const children = (childrenByParent.get(row.id) ?? []).sort((a, b) => a.name.localeCompare(b.name));
+      const rolled = children.reduce(
+        (acc, child) => ({
+          projects: acc.projects + child.projects,
+          open: acc.open + child.open,
+          inProgress: acc.inProgress + child.inProgress,
+          doneWeek: acc.doneWeek + child.doneWeek,
+        }),
+        {
+          projects: own.projects,
+          open: own.open,
+          inProgress: own.inProgress,
+          doneWeek: own.doneWeek,
+        },
+      );
+      return { ...own, ...rolled, children };
+    })
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
 function parseHomeSource(source?: string | null): HomeSource {
   const value = source?.trim() ?? "";
   if (!value || value === "all") return "";
@@ -128,6 +188,44 @@ export async function homeFeed(userId: string, workspaceId: string, now: number,
         and (${providerSource} = '' or i.provider = ${providerSource})
         and ${atriumOnly ? sql`false` : sql`true`}
     `);
+    const productRows = await tx.execute<{
+      id: string;
+      parent_id: string | null;
+      name: string;
+      project_count: number;
+      open_count: number;
+      in_progress_count: number;
+      done_week_count: number;
+    }>(sql`
+      select
+        prod.id,
+        prod.parent_id,
+        prod.name,
+        count(distinct p.id) filter (where p.id is not null)::int as project_count,
+        count(t.id) filter (
+          where t.deleted_at is null and t.status = 'open' and ${taskSourceMatch}
+        )::int as open_count,
+        count(t.id) filter (
+          where t.deleted_at is null and t.status = 'in_progress' and ${taskSourceMatch}
+        )::int as in_progress_count,
+        count(t.id) filter (
+          where t.deleted_at is null
+            and t.status = 'done'
+            and t.updated_at >= ${weekStart}
+            and ${taskSourceMatch}
+        )::int as done_week_count
+      from products prod
+      left join projects p
+        on p.product_id = prod.id
+        and p.workspace_id = prod.workspace_id
+        and p.status = 'active'
+        and ${mockProjectOk}
+      left join tasks t on t.project_id = p.id
+      where prod.workspace_id = ${workspaceId}::uuid
+        and prod.status = 'active'
+      group by prod.id, prod.parent_id, prod.name
+      order by prod.name
+    `);
     const statsRows = await tx.execute<{
       open_count: number;
       in_progress_count: number;
@@ -202,12 +300,14 @@ export async function homeFeed(userId: string, workspaceId: string, now: number,
       project_count: 0,
       integration_count: 0,
     };
+    const products = nestHomeProducts(productRows);
     return {
       source: selected,
       sources,
       priorities,
       dueSoon,
       blocked,
+      products,
       activity: atriumOnly ? [] : activity,
       weekEnd,
       stats: {
