@@ -1,4 +1,9 @@
-import { figmaCommentNodeId, figmaEmbedNodeParam } from "@/lib/figma-embed";
+import {
+  figmaCommentNodeId,
+  figmaCommentOffset,
+  figmaEmbedNodeParam,
+  type FigmaCommentPin,
+} from "@/lib/figma-embed";
 import { providerFetch } from "./http";
 import { ProviderError, type StoredCredential } from "./types";
 
@@ -7,6 +12,7 @@ export const FIGMA_OAUTH_SCOPES = [
   "current_user:read",
   "file_comments:read",
   "file_comments:write",
+  "file_content:read",
   "file_metadata:read",
 ] as const;
 
@@ -30,6 +36,9 @@ export type FigmaComment = {
   url: string | null;
   /** Layer the pin is attached to, in Figma's `12:34` form. Null for a loose canvas pin. */
   nodeId: string | null;
+  /** Offset inside `nodeId`, before the layer's size is known. */
+  offset: { x: number; y: number } | null;
+  pin: FigmaCommentPin | null;
 };
 
 type FigmaApiError = {
@@ -175,7 +184,61 @@ function toFigmaComment(comment: FigmaCommentNode & { id: string }, fileKey: str
     resolvedAt: comment.resolved_at ?? null,
     url: figmaCommentLink(fileKey, nodeId, comment.id),
     nodeId,
+    offset: figmaCommentOffset(comment.client_meta),
+    pin: null,
   };
+}
+
+async function figmaNodeSizes(
+  accessToken: string,
+  fileKey: string,
+  nodeIds: string[],
+): Promise<Map<string, { width: number; height: number }>> {
+  const unique = [...new Set(nodeIds)];
+  const sizes = new Map<string, { width: number; height: number }>();
+  for (let index = 0; index < unique.length; index += 30) {
+    const ids = unique.slice(index, index + 30);
+    const data = await figmaGet<{
+      nodes?: Record<
+        string,
+        { document?: { absoluteBoundingBox?: { width?: number; height?: number } } } | null
+      >;
+    }>(
+      accessToken,
+      `/v1/files/${encodeURIComponent(fileKey)}/nodes?ids=${encodeURIComponent(ids.join(","))}`,
+    );
+    for (const [id, node] of Object.entries(data.nodes ?? {})) {
+      const box = node?.document?.absoluteBoundingBox;
+      if (!box || typeof box.width !== "number" || typeof box.height !== "number") continue;
+      if (box.width <= 0 || box.height <= 0) continue;
+      sizes.set(id, { width: box.width, height: box.height });
+    }
+  }
+  return sizes;
+}
+
+async function withCommentPins(
+  accessToken: string,
+  fileKey: string,
+  comments: FigmaComment[],
+): Promise<FigmaComment[]> {
+  const ids = comments.flatMap((comment) => (comment.nodeId && comment.offset ? [comment.nodeId] : []));
+  if (ids.length === 0) return comments;
+  let sizes: Map<string, { width: number; height: number }>;
+  try {
+    sizes = await figmaNodeSizes(accessToken, fileKey, ids);
+  } catch {
+    return comments;
+  }
+  return comments.map((comment) => {
+    if (!comment.nodeId || !comment.offset) return comment;
+    const size = sizes.get(comment.nodeId);
+    if (!size) return comment;
+    return {
+      ...comment,
+      pin: { x: comment.offset.x, y: comment.offset.y, nodeWidth: size.width, nodeHeight: size.height },
+    };
+  });
 }
 
 type FigmaTokenResponse = {
@@ -293,10 +356,11 @@ export async function listFigmaComments(accessToken: string, fileKey: string): P
     accessToken,
     `/v1/files/${encodeURIComponent(fileKey)}/comments`,
   );
-  return (data.comments ?? [])
+  const comments = (data.comments ?? [])
     .filter((comment): comment is FigmaCommentNode & { id: string } => Boolean(comment.id))
     .map((comment) => toFigmaComment(comment, fileKey))
     .sort((a, b) => Date.parse(a.createdAt) - Date.parse(b.createdAt));
+  return withCommentPins(accessToken, fileKey, comments);
 }
 
 export async function postFigmaComment(

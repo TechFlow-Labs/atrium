@@ -2,6 +2,7 @@ import { sql } from "drizzle-orm";
 import { requireAction } from "../authz/membership";
 import { withUser, type Tx } from "../db/client";
 import { openCredential, sealCredential } from "../integrations/credentials";
+import type { FigmaCommentPin } from "@/lib/figma-embed";
 import {
   listFigmaComments,
   postFigmaComment,
@@ -24,6 +25,7 @@ export type FigmaCommentView = {
   resolvedAt: string | null;
   url: string | null;
   nodeId: string | null;
+  pin: FigmaCommentPin | null;
 };
 
 export type ProjectFigmaCommentsResult = {
@@ -36,7 +38,7 @@ export type ProjectFigmaCommentsResult = {
   unavailableReason: string | null;
 };
 
-function toView(comment: FigmaComment, nodeId = comment.nodeId): FigmaCommentView {
+function toView(comment: FigmaComment, nodeId = comment.nodeId, pin = comment.pin): FigmaCommentView {
   return {
     id: comment.id,
     body: comment.message,
@@ -45,6 +47,7 @@ function toView(comment: FigmaComment, nodeId = comment.nodeId): FigmaCommentVie
     resolvedAt: comment.resolvedAt,
     url: comment.url,
     nodeId,
+    pin,
   };
 }
 
@@ -59,7 +62,9 @@ function threadComments(comments: FigmaComment[]): FigmaCommentThread[] {
   }
   return roots.map((root) => ({
     root: toView(root),
-    replies: (byParent.get(root.id) ?? []).map((reply) => toView(reply, reply.nodeId ?? root.nodeId)),
+    replies: (byParent.get(root.id) ?? []).map((reply) =>
+      toView(reply, reply.nodeId ?? root.nodeId, reply.pin ?? root.pin),
+    ),
   }));
 }
 

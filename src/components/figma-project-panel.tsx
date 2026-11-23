@@ -58,6 +58,8 @@ export function FigmaProjectPanel({
         editUrl={editUrl}
         embedUrl={focusedEmbedUrl}
         focusKey={selected?.nodeId ?? "file"}
+        pin={selected?.pin ?? null}
+        pulseKey={selectedId ?? ""}
       />
       <div className="rounded-xl border bg-card p-4">
         <FigmaProjectComments

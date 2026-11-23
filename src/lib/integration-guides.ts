@@ -158,7 +158,7 @@ const FIGMA_OAUTH: IntegrationGuide = {
   steps: [
     "Open developers.figma.com/apps (or Figma → Settings → Apps), then create an OAuth app named Atrium.",
     "Add this callback URL: {callbackUrl}",
-    "Request scopes current_user:read, file_comments:read, file_comments:write, and file_metadata:read.",
+    "Request scopes current_user:read, file_comments:read, file_comments:write, file_content:read, and file_metadata:read.",
     "Copy the Client ID and Client Secret into the Figma fields in Atrium (or set FIGMA_CLIENT_ID and FIGMA_CLIENT_SECRET on the server).",
     "In Atrium, choose Continue with Figma and authorize access.",
     "Open a project → Manage, paste a Figma file URL, then use the embed, Edit in Figma, and Design comments on the project page.",

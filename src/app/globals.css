@@ -839,3 +839,64 @@ html[data-motion="off"] [data-reveal-child][data-revealed] {
     --y: 0 !important;
   }
 }
+
+@keyframes figma-pin-ring {
+  0% {
+    transform: translate(-50%, -50%) scale(0.4);
+    opacity: 0.9;
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(2.6);
+    opacity: 0;
+  }
+}
+
+@keyframes figma-pin-dot {
+  0% {
+    transform: translate(-50%, -50%) scale(0.5);
+    opacity: 0;
+  }
+  18% {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 1;
+  }
+  72% {
+    opacity: 1;
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 0;
+  }
+}
+
+.figma-pin-dot,
+.figma-pin-ring {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 16px;
+  height: 16px;
+  border-radius: 9999px;
+}
+
+.figma-pin-dot {
+  background: #e11d48;
+  box-shadow: 0 0 0 5px rgb(255 255 255 / 0.92);
+  animation: figma-pin-dot 1.35s ease forwards;
+}
+
+.figma-pin-ring {
+  border: 2px solid #e11d48;
+  animation: figma-pin-ring 1.35s ease-out forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .figma-pin-dot,
+  .figma-pin-ring {
+    animation: none;
+  }
+
+  .figma-pin-ring {
+    opacity: 0;
+  }
+}
