@@ -146,7 +146,10 @@ export function figmaEditUrl(fileKey: string, kind: FigmaEmbedKind): string {
 
 export function figmaEmbedUrl(fileKey: string, kind: FigmaEmbedKind): string {
   const pathKind = kind === "file" ? "design" : kind;
-  return `https://embed.figma.com/${pathKind}/${encodeURIComponent(fileKey)}`;
+  const url = new URL(`https://embed.figma.com/${pathKind}/${encodeURIComponent(fileKey)}`);
+  // Figma leaves the embed on the logo until this host id is present.
+  url.searchParams.set("embed-host", "atrium");
+  return url.toString();
 }
 
 type FigmaTokenResponse = {
