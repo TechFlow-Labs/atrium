@@ -129,10 +129,6 @@ async function TasksContent({
           heading={
             <>
               <h1 className="text-4xl">Issues</h1>
-              <p className="mt-1 text-sm text-muted">
-                Native issues are edited here. Provider issues show their source and only offer actions that
-                provider supports.
-              </p>
             </>
           }
           actions={

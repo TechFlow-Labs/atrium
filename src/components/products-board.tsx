@@ -233,7 +233,7 @@ export function ProductsBoard({
               : "Products and issue stats across every workspace you belong to."}
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2">
           {scopeNav}
           {statusNav}
           {canWrite && scope === "current" ? (

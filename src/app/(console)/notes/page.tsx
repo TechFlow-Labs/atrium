@@ -9,6 +9,7 @@ import { ScreenLoader } from "@/components/screen-loader";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/field";
+import { MenuSelect } from "@/components/ui/menu-select";
 import { cn, formatWhen } from "@/lib/utils";
 import { getSessionUser } from "@/server/auth/session";
 import { workspaceContext } from "@/server/auth/workspace";
@@ -125,40 +126,29 @@ async function NotesContent({
       ) : null}
 
       {feed.connections.length > 0 ? (
-        <form data-tour="notes-filters" className="flex flex-wrap items-end gap-3 rounded-lg border bg-card p-3" method="get">
+        <form data-tour="notes-filters" className="flex flex-wrap items-center gap-1.5" method="get">
           {params.path ? <input type="hidden" name="path" value={params.path} /> : null}
           {params.integration ? <input type="hidden" name="integration" value={params.integration} /> : null}
-          <div className="min-w-[12rem] flex-1">
-            <label htmlFor="notes-q" className="text-xs font-medium text-foreground/70">
-              Search
-            </label>
-            <Input
-              id="notes-q"
-              name="q"
-              defaultValue={params.q ?? ""}
-              placeholder="Filter by title or path"
-              className="mt-1"
-            />
-          </div>
-          <div className="min-w-[10rem]">
-            <label htmlFor="notes-folder" className="text-xs font-medium text-foreground/70">
-              Folder
-            </label>
-            <select
-              id="notes-folder"
-              name="folder"
-              defaultValue={params.folder ?? ""}
-              className="mt-1 flex h-10 w-full rounded-md border border-border bg-background px-3 text-sm"
-            >
-              <option value="">All folders</option>
-              {folders.map((folder) => (
-                <option key={folder} value={folder}>
-                  {folder}
-                </option>
-              ))}
-            </select>
-          </div>
-          <Button type="submit" variant="outline">
+          <Input
+            id="notes-q"
+            name="q"
+            defaultValue={params.q ?? ""}
+            placeholder="Search notes"
+            aria-label="Search notes"
+            className="h-8 w-52 text-xs"
+          />
+          <MenuSelect
+            id="notes-folder"
+            name="folder"
+            aria-label="Folder"
+            defaultValue={params.folder ?? ""}
+            triggerClassName="h-8 w-auto min-w-36 px-2 text-xs"
+            options={[
+              { value: "", label: "All folders" },
+              ...folders.map((folder) => ({ value: folder, label: folder })),
+            ]}
+          />
+          <Button type="submit" variant="outline" size="sm">
             Apply
           </Button>
         </form>

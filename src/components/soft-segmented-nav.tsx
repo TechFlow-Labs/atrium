@@ -19,7 +19,7 @@ export function SoftSegmentedNav<T extends string>({
   return (
     <nav
       data-tour={dataTour}
-      className="flex items-center gap-1 rounded-md border bg-card p-0.5 text-sm"
+      className="flex items-center gap-0.5 rounded-md border bg-card p-0.5 text-xs"
       aria-label={ariaLabel}
     >
       {options.map(({ value: optionValue, label, icon: Icon }) => {
@@ -33,13 +33,13 @@ export function SoftSegmentedNav<T extends string>({
               if (!active) onChange(optionValue);
             }}
             className={cn(
-              "inline-flex items-center gap-1.5 rounded px-2.5 py-1.5 transition",
+              "inline-flex items-center gap-1 rounded px-2 py-1 transition",
               active
                 ? "bg-foreground text-background"
                 : "text-muted hover:bg-accent hover:text-foreground",
             )}
           >
-            <Icon className="size-3.5" aria-hidden="true" />
+            <Icon className="size-3" aria-hidden="true" />
             {label}
           </button>
         );

@@ -529,7 +529,7 @@ export function ProjectsBoard({
         <div>
           <h1 className="text-4xl">Projects</h1>
         </div>
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2">
           {statusNav}
           {!editing ? (
             <Button type="button" variant="outline" onClick={() => setEditing(true)}>

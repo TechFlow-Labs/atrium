@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
-import { Boxes, Check, ChevronDown, CircleDashed, Layers, Search, UserRound } from "lucide-react";
+import { Boxes, Check, ChevronDown, CircleDashed, Layers, ListFilter, Search, UserRound } from "lucide-react";
 import { ProviderIcon, providerLabel } from "@/components/provider-icon";
 import { PriorityIcon, StatusIcon } from "@/components/task-meta-icons";
 import {
@@ -12,6 +12,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useHoverMenu } from "@/components/ui/use-hover-menu";
 import {
   buildTasksHref,
@@ -66,6 +67,7 @@ function MultiFilterPicker({
   options,
   onChange,
   noun,
+  fullWidth = false,
 }: {
   label: string;
   emptyLabel: string;
@@ -73,6 +75,7 @@ function MultiFilterPicker({
   options: PickerOption[];
   onChange: (values: string[]) => void;
   noun: string;
+  fullWidth?: boolean;
 }) {
   const menu = useHoverMenu();
   const selected = options.filter((option) => values.includes(option.value));
@@ -100,40 +103,21 @@ function MultiFilterPicker({
       <DropdownMenuTrigger
         aria-label={label}
         className={cn(
-          "inline-flex h-10 w-full items-center gap-2 rounded-md border border-border bg-card px-3 text-left text-sm outline-none",
+          "inline-flex h-8 items-center gap-1.5 rounded-md border border-border bg-card px-2 text-left text-xs outline-none",
+          fullWidth && "w-full",
           "transition hover:bg-accent/40 focus-visible:ring-2 focus-visible:ring-ring",
+          selected.length > 0 && "border-foreground/25 bg-accent/30",
           menu.open && "border-foreground/20 bg-accent/40",
         )}
         {...menu.triggerProps}
       >
-        <span className="inline-flex min-w-0 flex-1 items-center gap-2">
-          {selected.length === 0 ? (
-            <Layers className="size-4 shrink-0 text-muted" aria-hidden="true" />
-          ) : (
-            <span className="inline-flex items-center" aria-hidden="true">
-              {selected.map((option, index) => (
-                <span
-                  key={option.value}
-                  className={cn(
-                    "inline-flex size-6 items-center justify-center rounded-full bg-card ring-2 ring-card",
-                    index > 0 && "-ml-1.5",
-                  )}
-                  style={{ zIndex: selected.length - index }}
-                >
-                  {option.icon}
-                </span>
-              ))}
-            </span>
-          )}
-          <span className="min-w-0 flex-1 truncate">{summary}</span>
-        </span>
-        <ChevronDown className="size-3.5 shrink-0 text-muted" aria-hidden="true" />
+        <span className="text-muted">{label}</span>
+        {selected.length > 0 ? (
+          <span className="max-w-36 truncate font-medium">{summary}</span>
+        ) : null}
+        <ChevronDown className="size-3 shrink-0 text-muted" aria-hidden="true" />
       </DropdownMenuTrigger>
-      <DropdownMenuContent
-        align="start"
-        className="w-[var(--radix-dropdown-menu-trigger-width)] min-w-56"
-        {...menu.contentProps}
-      >
+      <DropdownMenuContent align="start" className="min-w-56" {...menu.contentProps}>
         <DropdownMenuLabel>{label}</DropdownMenuLabel>
         <DropdownMenuSeparator />
         <DropdownMenuItem
@@ -183,7 +167,7 @@ export function TaskViewToggle({
   return (
     <nav
       data-drag-inert=""
-      className="flex items-center gap-1 rounded-md border bg-card p-0.5 text-sm"
+      className="flex items-center gap-0.5 rounded-md border bg-card p-0.5 text-xs"
       aria-label="Task views"
     >
       <button
@@ -191,7 +175,7 @@ export function TaskViewToggle({
         aria-pressed={!board}
         onClick={() => onNavigate(buildTasksHref({ ...values, view: undefined }))}
         className={cn(
-          "rounded px-2.5 py-1.5 transition",
+          "rounded px-2 py-1 transition",
           !board
             ? "bg-foreground text-background"
             : "text-muted hover:bg-accent hover:text-foreground",
@@ -204,7 +188,7 @@ export function TaskViewToggle({
         aria-pressed={board}
         onClick={() => onNavigate(buildTasksHref({ ...values, view: "board" }))}
         className={cn(
-          "rounded px-2.5 py-1.5 transition",
+          "rounded px-2 py-1 transition",
           board
             ? "bg-foreground text-background"
             : "text-muted hover:bg-accent hover:text-foreground",
@@ -267,13 +251,13 @@ export function TaskSearch({
     >
       <label className="relative block">
         <span className="sr-only">Search tasks</span>
-        <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted" aria-hidden="true" />
+        <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted" aria-hidden="true" />
         <input
           name="q"
           value={q}
           onChange={(event) => setQ(event.target.value)}
           placeholder="Search"
-          className="h-10 w-full rounded-md border bg-card py-1 pl-9 pr-3 text-sm outline-none ring-ring focus-visible:ring-2"
+          className="h-8 w-full rounded-md border bg-card py-1 pl-8 pr-2 text-xs outline-none ring-ring focus-visible:ring-2"
           aria-label="Search tasks"
         />
       </label>
@@ -350,25 +334,51 @@ export function TaskFilters({
     );
   }
 
+  const menu = useHoverMenu();
+  const projectSelection = selectedProjects.filter((id) => visibleProjects.some((project) => project.id === id));
+  const chips = [
+    ...(values.q?.trim() ? [{ key: "q", group: "Search", label: values.q.trim() }] : []),
+    ...chipLabels("Status", statuses, STATUS_OPTIONS),
+    ...chipLabels("Priority", priorities, PRIORITY_OPTIONS),
+    ...chipLabels("Product", selectedProducts, productOptions),
+    ...chipLabels("Project", projectSelection, projectOptions),
+    ...chipLabels("Assigned to", selectedAssignees, assigneeOptions),
+    ...chipLabels("Source", sources, SOURCE_OPTIONS),
+  ];
+
   return (
     <div
       data-drag-inert=""
-      className={cn(
-        "grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-7",
-        pending && "opacity-70",
-      )}
+      className={cn("flex flex-wrap items-center gap-1.5", pending && "opacity-70")}
       aria-busy={pending}
     >
-      <TaskSearch
-        values={values}
-        pending={pending}
-        onNavigate={onNavigate}
-        className="sm:col-span-2 lg:col-span-1"
-      />
+      <Popover open={menu.open} onOpenChange={menu.onOpenChange}>
+        <PopoverTrigger
+          type="button"
+          aria-label="Filters"
+          className={cn(
+            "inline-flex h-8 items-center gap-1.5 rounded-md border border-border bg-card px-2.5 text-xs outline-none",
+            "transition hover:bg-accent/40 focus-visible:ring-2 focus-visible:ring-ring",
+            menu.open && "border-foreground/20 bg-accent/40",
+          )}
+          {...menu.triggerProps}
+        >
+          <ListFilter className="size-3.5" aria-hidden="true" />
+          Filters
+        </PopoverTrigger>
+        <PopoverContent
+          align="start"
+          className="w-[min(100vw-2rem,44rem)]"
+          {...menu.contentProps}
+          onPointerDown={() => menu.onOpenChange(true)}
+        >
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+          <TaskSearch values={values} pending={pending} onNavigate={onNavigate} className="col-span-2 sm:col-span-3" />
       <MultiFilterPicker
         label="Status"
         emptyLabel="Any status"
         noun="statuses"
+        fullWidth
         values={statuses}
         options={STATUS_OPTIONS}
         onChange={(next) => navigate({ status: serializeFilterList(next) })}
@@ -377,6 +387,7 @@ export function TaskFilters({
         label="Priority"
         emptyLabel="Any priority"
         noun="priorities"
+        fullWidth
         values={priorities}
         options={PRIORITY_OPTIONS}
         onChange={(next) => navigate({ priority: serializeFilterList(next) })}
@@ -386,6 +397,7 @@ export function TaskFilters({
           label="Product"
           emptyLabel="Any product"
           noun="products"
+          fullWidth
           values={selectedProducts}
           options={productOptions}
           onChange={(next) => {
@@ -405,7 +417,8 @@ export function TaskFilters({
         label="Project"
         emptyLabel="Any project"
         noun="projects"
-        values={selectedProjects.filter((id) => visibleProjects.some((project) => project.id === id))}
+        fullWidth
+        values={projectSelection}
         options={projectOptions}
         onChange={(next) => navigate({ project: serializeFilterList(next) })}
       />
@@ -413,6 +426,7 @@ export function TaskFilters({
         label="Assigned to"
         emptyLabel="Any assignee"
         noun="assignees"
+        fullWidth
         values={selectedAssignees}
         options={assigneeOptions}
         onChange={(next) => navigate({ assignee: serializeFilterList(next) })}
@@ -421,10 +435,53 @@ export function TaskFilters({
         label="Source"
         emptyLabel="Any source"
         noun="sources"
+        fullWidth
         values={sources}
         options={SOURCE_OPTIONS}
         onChange={(next) => navigate({ source: serializeFilterList(next) })}
       />
+          </div>
+        </PopoverContent>
+      </Popover>
+      {chips.map((chip) => (
+        <span
+          key={chip.key}
+          className="inline-flex h-8 max-w-48 items-center gap-1 rounded-md border border-foreground/20 bg-accent/30 px-2 text-xs"
+        >
+          <span className="text-muted">{chip.group}</span>
+          <span className="truncate font-medium">{chip.label}</span>
+        </span>
+      ))}
+      {chips.length > 0 ? (
+        <button
+          type="button"
+          className="h-8 rounded-md px-2 text-xs text-muted transition hover:bg-accent hover:text-foreground"
+          onClick={() =>
+            onNavigate(
+              buildTasksHref({
+                ...values,
+                q: undefined,
+                status: undefined,
+                priority: undefined,
+                product: undefined,
+                project: undefined,
+                source: undefined,
+                assignee: undefined,
+              }),
+            )
+          }
+        >
+          Clear
+        </button>
+      ) : null}
     </div>
   );
+}
+
+function chipLabels(group: string, values: string[], options: PickerOption[]) {
+  return values.flatMap((value) => {
+    const option = options.find((item) => item.value === value);
+    if (!option) return [];
+    return [{ key: `${group}:${value}`, group, label: option.label }];
+  });
 }
