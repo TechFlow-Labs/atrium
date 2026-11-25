@@ -34,6 +34,8 @@ export type TasksPanelTask = {
   provider: string | null;
   externalUrl: string | null;
   syncState: string;
+  issueCategory: string | null;
+  issueType: string | null;
 };
 
 export type TasksPanelPayload = {
@@ -112,6 +114,8 @@ export async function loadTasksPanel(
       provider: task.provider,
       externalUrl: task.external_url,
       syncState: task.sync_state,
+      issueCategory: task.issue_category,
+      issueType: task.issue_type,
     })),
   };
 }

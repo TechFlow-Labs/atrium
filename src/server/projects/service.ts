@@ -182,6 +182,7 @@ export async function getProjectsAnalytics(
       from tasks t
       join projects p on p.id = t.project_id
       where t.workspace_id = ${workspaceId}::uuid
+        and t.parent_task_id is null
         and t.deleted_at is null
         and (${status} = 'all' or p.status = ${status})
         and ${sqlDevMockProjectVisible(showMocks)}
@@ -212,7 +213,7 @@ export async function getProjectsAnalytics(
         )::int as attention_count,
         count(*) filter (where t.deleted_at is null)::int as total_count
       from projects p
-      left join tasks t on t.project_id = p.id and t.workspace_id = p.workspace_id
+      left join tasks t on t.project_id = p.id and t.workspace_id = p.workspace_id and t.parent_task_id is null
       where p.workspace_id = ${workspaceId}::uuid
         and (${status} = 'all' or p.status = ${status})
         and ${sqlDevMockProjectVisible(showMocks)}

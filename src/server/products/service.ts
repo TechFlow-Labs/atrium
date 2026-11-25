@@ -233,7 +233,7 @@ export async function listProducts(
       select ${productStatsSelect(showMocks)}
       from products p
       left join projects pr on pr.product_id = p.id and ${sqlProductProjectVisible(showMocks)}
-      left join tasks t on t.project_id = pr.id and t.workspace_id = p.workspace_id
+      left join tasks t on t.project_id = pr.id and t.workspace_id = p.workspace_id and t.parent_task_id is null
       where p.workspace_id = ${workspaceId}::uuid
         and (${status} = 'all' or p.status = ${status})
         and (
@@ -321,6 +321,7 @@ export async function getProductsAnalytics(
       join projects pr on pr.id = t.project_id
       join products p on p.id = pr.product_id
       where t.workspace_id = ${workspaceId}::uuid
+        and t.parent_task_id is null
         and t.deleted_at is null
         and (${status} = 'all' or p.status = ${status})
         and ${sqlProductProjectVisible(showMocks)}
@@ -385,7 +386,7 @@ export async function listWorkspaceProductPortfolios(
         select ${productStatsSelect(showMocks)}
         from products p
         left join projects pr on pr.product_id = p.id and ${sqlProductProjectVisible(showMocks)}
-        left join tasks t on t.project_id = pr.id and t.workspace_id = p.workspace_id
+        left join tasks t on t.project_id = pr.id and t.workspace_id = p.workspace_id and t.parent_task_id is null
         where p.workspace_id = ${workspace.id}::uuid
           and (${status} = 'all' or p.status = ${status})
           and (
@@ -430,7 +431,7 @@ export async function getProduct(
       select ${productStatsSelect(showMocks)}
       from products p
       left join projects pr on pr.product_id = p.id and ${sqlProductProjectVisible(showMocks)}
-      left join tasks t on t.project_id = pr.id and t.workspace_id = p.workspace_id
+      left join tasks t on t.project_id = pr.id and t.workspace_id = p.workspace_id and t.parent_task_id is null
       where p.workspace_id = ${workspaceId}::uuid and p.id = ${productId}::uuid
       group by ${PRODUCT_GROUP_BY}
     `);

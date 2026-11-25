@@ -109,6 +109,7 @@ export async function homeFeed(userId: string, workspaceId: string, now: number,
       select t.id, t.title, t.priority, t.status, t.due_at, p.name as project_name, t.provider, t.external_url
       from tasks t join projects p on p.id = t.project_id
       where t.workspace_id = ${workspaceId}::uuid
+        and t.parent_task_id is null
         and t.deleted_at is null
         and t.status in ('open', 'in_progress', 'blocked')
         and t.priority in ('urgent', 'high')
@@ -121,6 +122,7 @@ export async function homeFeed(userId: string, workspaceId: string, now: number,
       select t.id, t.title, t.due_at, t.status, p.name as project_name, t.provider
       from tasks t join projects p on p.id = t.project_id
       where t.workspace_id = ${workspaceId}::uuid
+        and t.parent_task_id is null
         and t.deleted_at is null
         and t.status not in ('done', 'cancelled')
         and t.due_at is not null
@@ -134,6 +136,7 @@ export async function homeFeed(userId: string, workspaceId: string, now: number,
       select t.id, t.title, p.name as project_name, t.provider
       from tasks t join projects p on p.id = t.project_id
       where t.workspace_id = ${workspaceId}::uuid
+        and t.parent_task_id is null
         and t.deleted_at is null
         and t.status = 'blocked'
         and ${taskSourceMatch}
@@ -226,7 +229,7 @@ export async function homeFeed(userId: string, workspaceId: string, now: number,
         and p.workspace_id = prod.workspace_id
         and p.status = 'active'
         and ${mockProjectOk}
-      left join tasks t on t.project_id = p.id
+      left join tasks t on t.project_id = p.id and t.parent_task_id is null
       where prod.workspace_id = ${workspaceId}::uuid
         and prod.status = 'active'
       group by prod.id, prod.parent_id, prod.name
@@ -244,32 +247,32 @@ export async function homeFeed(userId: string, workspaceId: string, now: number,
     }>(sql`
       select
         (select count(*)::int from tasks t
-          where t.workspace_id = ${workspaceId}::uuid and t.deleted_at is null and t.status = 'open'
+          where t.workspace_id = ${workspaceId}::uuid and t.parent_task_id is null and t.deleted_at is null and t.status = 'open'
             and ${taskSourceMatch}
             and ${mockTaskOk}) as open_count,
         (select count(*)::int from tasks t
-          where t.workspace_id = ${workspaceId}::uuid and t.deleted_at is null and t.status = 'in_progress'
+          where t.workspace_id = ${workspaceId}::uuid and t.parent_task_id is null and t.deleted_at is null and t.status = 'in_progress'
             and ${taskSourceMatch}
             and ${mockTaskOk}) as in_progress_count,
         (select count(*)::int from tasks t
-          where t.workspace_id = ${workspaceId}::uuid and t.deleted_at is null and t.status = 'blocked'
+          where t.workspace_id = ${workspaceId}::uuid and t.parent_task_id is null and t.deleted_at is null and t.status = 'blocked'
             and ${taskSourceMatch}
             and ${mockTaskOk}) as blocked_count,
         (select count(*)::int from tasks t
-          where t.workspace_id = ${workspaceId}::uuid and t.deleted_at is null
+          where t.workspace_id = ${workspaceId}::uuid and t.parent_task_id is null and t.deleted_at is null
             and t.status in ('open', 'in_progress', 'blocked')
             and t.priority in ('urgent', 'high')
             and ${taskSourceMatch}
             and ${mockTaskOk}) as attention_count,
         (select count(*)::int from tasks t
-          where t.workspace_id = ${workspaceId}::uuid and t.deleted_at is null
+          where t.workspace_id = ${workspaceId}::uuid and t.parent_task_id is null and t.deleted_at is null
             and t.status not in ('done', 'cancelled')
             and t.due_at is not null
             and t.due_at <= ${weekEnd}
             and ${taskSourceMatch}
             and ${mockTaskOk}) as due_soon_count,
         (select count(*)::int from tasks t
-          where t.workspace_id = ${workspaceId}::uuid and t.deleted_at is null
+          where t.workspace_id = ${workspaceId}::uuid and t.parent_task_id is null and t.deleted_at is null
             and t.status = 'done'
             and t.updated_at >= ${weekStart}
             and ${taskSourceMatch}
@@ -354,6 +357,7 @@ export async function searchWorkspace(userId: string, workspaceId: string, query
     const tasks = await tx.execute(sql`
       select t.id, t.title, t.status, t.provider from tasks t
       where t.workspace_id = ${workspaceId}::uuid
+        and t.parent_task_id is null
         and t.deleted_at is null
         and (t.title ilike ${like} or t.description ilike ${like})
         and ${sqlDevMockTaskVisible(showMocks)}
@@ -372,6 +376,7 @@ export async function calendarTasks(userId: string, workspaceId: string, start: 
              p.id as project_id, p.name as project_name, p.nickname as project_nickname
       from tasks t join projects p on p.id = t.project_id
       where t.workspace_id = ${workspaceId}::uuid
+        and t.parent_task_id is null
         and t.deleted_at is null
         and t.due_at >= ${new Date(start).toISOString()}
         and t.due_at < ${new Date(end).toISOString()}

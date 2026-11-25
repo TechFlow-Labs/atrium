@@ -15,6 +15,8 @@ import {
 import { PriorityIcon, StatusIcon } from "@/components/task-meta-icons";
 import { Badge } from "@/components/ui/badge";
 import { MenuSelect } from "@/components/ui/menu-select";
+import { IssueCategoryIcon, IssueTypeIcon } from "@/components/issue-kind-icons";
+import { issueKindLabel } from "@/lib/issue-kinds";
 import { cn } from "@/lib/utils";
 
 function taskProviderAccent(provider: string | null | undefined) {
@@ -39,6 +41,8 @@ type BoardTask = {
   project_name: string;
   codebase_label?: string | null;
   external_url: string | null;
+  issue_category?: string | null;
+  issue_type?: string | null;
 };
 
 type DragState = {
@@ -144,6 +148,13 @@ function TaskCardBody({
         ) : null}
       </div>
       <div className="mt-2 flex flex-wrap gap-1">
+        {issueKindLabel(task.issue_category, task.issue_type) ? (
+          <Badge tone="neutral" className="gap-1">
+            <IssueCategoryIcon categoryId={task.issue_category} className="size-3.5" />
+            <IssueTypeIcon typeId={task.issue_type} className="size-3.5" />
+            {issueKindLabel(task.issue_category, task.issue_type)}
+          </Badge>
+        ) : null}
         <Badge tone={task.priority}>
           <PriorityIcon priority={task.priority} className="size-3.5" />
           {task.priority}

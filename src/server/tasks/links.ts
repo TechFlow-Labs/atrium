@@ -289,6 +289,7 @@ export async function searchTasksForLink(
       from tasks t
       join projects p on p.id = t.project_id
       where t.workspace_id = ${workspaceId}::uuid
+        and t.parent_task_id is null
         and t.deleted_at is null
         and t.id <> ${input.excludeTaskId}::uuid
         and (

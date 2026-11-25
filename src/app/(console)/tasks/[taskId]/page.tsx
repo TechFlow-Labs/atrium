@@ -12,9 +12,10 @@ import { TaskDeleteDialog } from "@/components/task-delete-dialog";
 import { TaskTransferDialog } from "@/components/task-transfer-dialog";
 import { getSessionUser } from "@/server/auth/session";
 import { workspaceContext } from "@/server/auth/workspace";
+import { TaskSubtasks } from "@/components/task-subtasks";
 import { listTaskComments } from "@/server/tasks/comments";
 import { listTaskLinks } from "@/server/tasks/links";
-import { getTask } from "@/server/tasks/service";
+import { getTask, listChildTasks } from "@/server/tasks/service";
 
 export const instant = false;
 
@@ -44,12 +45,14 @@ async function TaskDetailContent({
   if (!UUID_RE.test(taskId)) notFound();
 
   const { workspaces } = await workspaceContext(user.id);
-  const [task, commentBundle, links] = await Promise.all([
+  const [task, commentBundle, links, subtasks] = await Promise.all([
     getTask(user.id, taskId),
     listTaskComments(user.id, taskId),
     listTaskLinks(user.id, taskId),
+    listChildTasks(user.id, taskId),
   ]);
   if (!task || !commentBundle || !links) notFound();
+  const parent = task.parent_task_id ? await getTask(user.id, task.parent_task_id) : null;
 
   const membership = workspaces.find((workspace) => workspace.id === task.workspace_id);
   const canWrite = membership ? membership.role !== "viewer" : false;
@@ -72,6 +75,11 @@ async function TaskDetailContent({
               {sourceLabel}
               {task.external_url ? " · synced into Atrium" : " · native in Atrium"}
             </p>
+            {parent ? (
+              <Link href={`/tasks/${parent.id}`} className="text-xs text-muted transition hover:text-foreground">
+                Subtask of {parent.title}
+              </Link>
+            ) : null}
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -124,8 +132,19 @@ async function TaskDetailContent({
               updatedAt={task.updated_at}
               syncState={task.sync_state}
               canWrite={canWrite}
+              issueCategory={task.issue_category}
+              issueType={task.issue_type}
+              isSubtask={Boolean(task.parent_task_id)}
             />
           </div>
+          {subtasks.length > 0 ? (
+            <TaskSubtasks
+              workspaceId={task.workspace_id}
+              parentTaskId={task.id}
+              subtasks={subtasks}
+              canWrite={canWrite}
+            />
+          ) : null}
         </div>
 
         <aside className="min-w-0 space-y-5 rounded-lg border bg-card/40 p-4 lg:sticky lg:top-6 lg:max-h-[calc(100dvh-6rem)] lg:overflow-y-auto lg:p-5">

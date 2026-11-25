@@ -6,8 +6,11 @@ import {
   listRemoteProjectsForCreateAction,
   type ActionState,
 } from "@/app/actions";
+import { IssueCategoryIcon } from "@/components/issue-kind-icons";
+import { IssueTypeOption } from "@/components/issue-type-option";
 import { ProviderIcon, providerLabel } from "@/components/provider-icon";
 import { Button } from "@/components/ui/button";
+import { ISSUE_CATEGORIES, issueCategory, issueType } from "@/lib/issue-kinds";
 import {
   Dialog,
   DialogContent,
@@ -59,6 +62,9 @@ export function TaskForm({
   triggerLabel?: string;
 }) {
   const [open, setOpen] = useState(false);
+  const [step, setStep] = useState<"category" | "type" | "details">("category");
+  const [issueCategoryId, setIssueCategoryId] = useState("");
+  const [issueTypeId, setIssueTypeId] = useState("");
   const [state, formAction, pending] = useActionState<ActionState, FormData>(action, {});
   const [seenError, setSeenError] = useState<string | null>(null);
   const showProjectPicker = (projects?.length ?? 0) > 1;
@@ -156,6 +162,12 @@ export function TaskForm({
     ?? filteredRemotes[0]
     ?? null;
 
+  const selectedCategory = issueCategory(issueCategoryId);
+  const selectedType = issueType(issueCategoryId, issueTypeId);
+  const selectedKindLabel = selectedCategory && selectedType
+    ? `${selectedCategory.label} · ${selectedType.label}`
+    : "Issue";
+
   const atriumProjectOptions = (projects ?? []).map((project) => ({
     value: project.id,
     label: project.name,
@@ -172,6 +184,9 @@ export function TaskForm({
           setDestination(defaultDestination);
           setRemoteError(null);
           setRemoteQuery("");
+          setStep("category");
+          setIssueCategoryId("");
+          setIssueTypeId("");
         }
       }}
     >
@@ -181,17 +196,93 @@ export function TaskForm({
           {triggerLabel}
         </Button>
       </DialogTrigger>
-      <DialogContent>
+      <DialogContent className={step === "details" ? undefined : "w-[min(100%-2rem,46rem)]"}>
         <DialogHeader>
-          <DialogTitle>Add an issue</DialogTitle>
+          <DialogTitle className="flex items-center gap-2">
+            {step === "type" && selectedCategory ? (
+              <IssueCategoryIcon categoryId={selectedCategory.id} className="size-5 text-foreground" />
+            ) : null}
+            {step === "category" ? "What kind of issue?" : step === "type" ? selectedCategory?.label : "Add an issue"}
+          </DialogTitle>
           <DialogDescription>
-            Create an issue in this workspace, or sync it to a connected provider project.
+            {step === "category"
+              ? "Pick the area of work. The type you choose next adds the steps that kind of issue usually needs."
+              : step === "type"
+                ? "Pick a type. Its steps are added on the issue."
+                : selectedType
+                  ? `${selectedKindLabel}. These steps are added on the issue and stay in Atrium.`
+                  : "No category yet. You can set one later. No subtasks are added."}
           </DialogDescription>
         </DialogHeader>
+        {step === "category" ? (
+          <div className="grid gap-3">
+            <div className="grid gap-2 sm:grid-cols-2">
+              {ISSUE_CATEGORIES.map((category) => (
+                <button
+                  key={category.id}
+                  type="button"
+                  className="rounded-lg border bg-card px-3 py-3 text-left transition hover:border-foreground/30 hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  onClick={() => {
+                    setIssueCategoryId(category.id);
+                    setIssueTypeId("");
+                    setStep("type");
+                  }}
+                >
+                  <span className="flex items-center gap-2 text-sm font-medium">
+                    <IssueCategoryIcon categoryId={category.id} className="text-foreground" />
+                    {category.label}
+                  </span>
+                  <span className="mt-0.5 block text-xs text-muted">{category.description}</span>
+                </button>
+              ))}
+            </div>
+            <button
+              type="button"
+              className={cn(
+                "rounded-lg border border-dashed bg-card px-3 py-3 text-left transition",
+                "hover:border-foreground/30 hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+              )}
+              onClick={() => {
+                setIssueCategoryId("");
+                setIssueTypeId("");
+                setStep("details");
+              }}
+            >
+              <span className="block text-sm font-medium">Not sure yet</span>
+              <span className="mt-0.5 block text-xs text-muted">
+                Leave category and type blank. You can set them later. No subtasks are added.
+              </span>
+            </button>
+          </div>
+        ) : null}
+        {step === "type" && selectedCategory ? (
+          <div className="grid gap-3">
+            <div className="grid gap-2 sm:grid-cols-2">
+              {selectedCategory.types.map((type) => (
+                <IssueTypeOption
+                  key={type.id}
+                  type={type}
+                  onSelect={() => {
+                    setIssueTypeId(type.id);
+                    setStep("details");
+                  }}
+                />
+              ))}
+            </div>
+            <div className="flex justify-start">
+              <Button type="button" variant="outline" onClick={() => setStep("category")}>
+                Back
+              </Button>
+            </div>
+          </div>
+        ) : null}
+        {step === "details" ? (
         <form action={formAction} className="grid gap-4">
           <input type="hidden" name="workspaceId" value={workspaceId} />
           <input type="hidden" name="returnTo" value={returnTo} />
           <input type="hidden" name="destination" value={destination} />
+          <input type="hidden" name="issueCategory" value={issueCategoryId} />
+          <input type="hidden" name="issueType" value={issueTypeId} />
 
           {canSyncToProvider ? (
             <fieldset className="grid gap-2">
@@ -348,6 +439,16 @@ export function TaskForm({
             </div>
           )}
 
+          {selectedType ? (
+            <ul className="grid gap-2 rounded-lg border bg-muted/20 px-3 py-2">
+              {selectedType.subtasks.map((subtask) => (
+                <li key={subtask.title} className="grid gap-0.5">
+                  <span className="text-xs font-medium text-foreground">{subtask.title}</span>
+                  <span className="text-xs text-muted">{subtask.description}</span>
+                </li>
+              ))}
+            </ul>
+          ) : null}
           <div>
             <Label htmlFor="title">Title</Label>
             <Input id="title" name="title" required className="mt-1" autoFocus />
@@ -398,6 +499,14 @@ export function TaskForm({
           </div>
           {state.error ? <p className="text-sm text-destructive">{state.error}</p> : null}
           <div className="flex justify-end gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setStep(selectedType ? "type" : "category")}
+              disabled={pending}
+            >
+              Back
+            </Button>
             <Button type="button" variant="outline" onClick={() => setOpen(false)} disabled={pending}>
               Cancel
             </Button>
@@ -412,6 +521,7 @@ export function TaskForm({
             </Button>
           </div>
         </form>
+        ) : null}
       </DialogContent>
     </Dialog>
   );

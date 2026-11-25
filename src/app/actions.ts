@@ -684,6 +684,8 @@ export async function createTaskAction(_state: ActionState, formData: FormData):
       priority: (String(formData.get("priority") ?? "medium") || "medium") as "medium",
       dueAt: String(formData.get("dueAt") ?? "") || null,
       assigneeUserId: String(formData.get("assigneeUserId") ?? "") || null,
+      issueCategory: String(formData.get("issueCategory") ?? "") || null,
+      issueType: String(formData.get("issueType") ?? "") || null,
     });
   } catch (error) {
     unstable_rethrow(error);
@@ -770,6 +772,8 @@ export async function updateTaskDetailAction(_state: ActionState, formData: Form
       priority: formData.get("priority") ? (String(formData.get("priority")) as "medium") : undefined,
       dueAt: formData.has("dueAt") ? String(formData.get("dueAt") ?? "") || null : undefined,
       assigneeUserId: formData.has("assigneeUserId") ? String(formData.get("assigneeUserId") ?? "") || null : undefined,
+      issueCategory: formData.has("issueCategory") ? String(formData.get("issueCategory") ?? "") || null : undefined,
+      issueType: formData.has("issueType") ? String(formData.get("issueType") ?? "") || null : undefined,
     });
   } catch (error) {
     unstable_rethrow(error);
@@ -784,6 +788,27 @@ export async function updateTaskDetailAction(_state: ActionState, formData: Form
     return { notice: "Saved", version: version + 1 };
   }
   redirect(returnTo);
+}
+
+export async function setTaskIssueKindAction(input: {
+  workspaceId: string;
+  taskId: string;
+  version: number;
+  issueCategory: string;
+  issueType: string;
+}): Promise<{ notice: string; version: number } | { error: string }> {
+  try {
+    await updateTask(await userId(), input.workspaceId, input.taskId, {
+      version: input.version,
+      issueCategory: input.issueCategory.trim() || null,
+      issueType: input.issueType.trim() || null,
+    });
+  } catch (error) {
+    unstable_rethrow(error);
+    return { error: error instanceof Error ? error.message : "Could not set the issue kind" };
+  }
+  revalidateConsoleData([`/tasks/${input.taskId}`, "/tasks"]);
+  return { notice: "Saved", version: input.version + 1 };
 }
 
 export async function addTaskCommentAction(_state: ActionState, formData: FormData): Promise<ActionState> {

@@ -5,6 +5,7 @@ import { useRef, useState, useTransition } from "react";
 import { CalendarDays, Clock3, FolderKanban, UserRound } from "lucide-react";
 import { updateTaskDetailAction } from "@/app/actions";
 import { MarkdownContent } from "@/components/markdown-content";
+import { TaskIssueKind } from "@/components/task-issue-kind";
 import { PriorityIcon, StatusIcon, SyncStateIcon, syncStateLabel } from "@/components/task-meta-icons";
 import { MenuSelect } from "@/components/ui/menu-select";
 import { toggleMarkdownCheckboxAt } from "@/lib/markdown-checkboxes";
@@ -61,6 +62,9 @@ export function TaskDetailForm({
   updatedAt,
   syncState,
   canWrite,
+  issueCategory = null,
+  issueType = null,
+  isSubtask = false,
 }: {
   workspaceId: string;
   taskId: string;
@@ -76,6 +80,9 @@ export function TaskDetailForm({
   updatedAt: Date | string;
   syncState: string;
   canWrite: boolean;
+  issueCategory?: string | null;
+  issueType?: string | null;
+  isSubtask?: boolean;
 }) {
   const [title, setTitle] = useState(initialTitle);
   const [description, setDescription] = useState(initialDescription);
@@ -86,6 +93,7 @@ export function TaskDetailForm({
   const [error, setError] = useState<string | null>(null);
   const [savedFlash, setSavedFlash] = useState(false);
   const [pending, startTransition] = useTransition();
+  const [version, setVersion] = useState(initialVersion);
   const titleRef = useRef(initialTitle);
   const descriptionRef = useRef(initialDescription);
   const dueRef = useRef(dueInputValue(initialDueAt));
@@ -108,6 +116,7 @@ export function TaskDetailForm({
       setError(null);
       if (typeof result.version === "number") {
         versionRef.current = result.version;
+        setVersion(result.version);
       }
       setSavedFlash(true);
       window.setTimeout(() => setSavedFlash(false), 1200);
@@ -325,6 +334,16 @@ export function TaskDetailForm({
             <dd className="mt-0.5">{formatWhen(updatedAt)}</dd>
           </div>
         </div>
+        {!isSubtask ? (
+          <TaskIssueKind
+            workspaceId={workspaceId}
+            taskId={taskId}
+            version={version}
+            issueCategory={issueCategory}
+            issueType={issueType}
+            canWrite={canWrite}
+          />
+        ) : null}
       </dl>
 
       {error ? <p className="text-sm text-destructive">{error}</p> : null}

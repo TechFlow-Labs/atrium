@@ -106,6 +106,8 @@ export function TasksResultsPanel({
             project_name: task.projectName,
             codebase_label: task.codebaseLabel,
             external_url: task.externalUrl,
+            issue_category: task.issueCategory,
+            issue_type: task.issueType,
           }))}
           providerTileStyles={panel.providerTileStyles}
           relatedGroupIds={groupIdRecord}
@@ -147,6 +149,8 @@ export function TasksResultsPanel({
             provider: task.provider,
             externalUrl: task.externalUrl,
             syncState: task.syncState,
+            issueCategory: task.issueCategory,
+            issueType: task.issueType,
           }))}
         />
       </div>

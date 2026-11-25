@@ -5,6 +5,7 @@ import { requireAction } from "../authz/membership";
 import { withUser, type Tx } from "../db/client";
 import { textArray } from "../db/sql";
 import { areDevMocksVisible, sqlDevMockProjectVisible } from "../dev/mock-data";
+import { issueType } from "@/lib/issue-kinds";
 import { projectIssueLabels } from "@/lib/project-display";
 import { getAdapter } from "../integrations/registry";
 import type { ProviderId, TaskPriority, TaskStatus } from "../integrations/types";
@@ -41,6 +42,9 @@ export type TaskRecord = {
   version: number;
   deleted_at: Date | null;
   updated_at: Date;
+  parent_task_id: string | null;
+  issue_category: string | null;
+  issue_type: string | null;
 };
 
 type TaskRow = Omit<TaskRecord, "project_name" | "codebase_label"> & {
@@ -85,6 +89,9 @@ function toTaskRecord(row: TaskRow): TaskRecord {
     version: row.version,
     deleted_at: row.deleted_at,
     updated_at: row.updated_at,
+    parent_task_id: row.parent_task_id,
+    issue_category: row.issue_category,
+    issue_type: row.issue_type,
   };
 }
 
@@ -93,7 +100,8 @@ const TASK_PROJECT_SELECT = sql`
   p.name as project_raw_name,
   p.nickname as project_nickname,
   p.ownership_mode,
-  t.milestone_id, t.title, t.description, t.status, t.priority, t.due_at,
+  t.milestone_id, t.parent_task_id, t.issue_category, t.issue_type,
+  t.title, t.description, t.status, t.priority, t.due_at,
   t.assignee_user_id, coalesce(u.name, t.assignee_label) as assignee_label,
   t.provider, t.external_url, t.sync_state, t.sync_error, t.version, t.deleted_at, t.updated_at,
   c.provider_project_id,
@@ -112,6 +120,8 @@ export type TaskInput = {
   dueAt?: string | null;
   assigneeUserId?: string | null;
   milestoneId?: string | null;
+  issueCategory?: string | null;
+  issueType?: string | null;
 };
 
 const STATUSES = new Set(["open", "in_progress", "blocked", "done", "cancelled"]);
@@ -261,6 +271,44 @@ export async function getTask(
   });
 }
 
+export type ChildTask = {
+  id: string;
+  title: string;
+  status: TaskStatus;
+  version: number;
+};
+
+export async function listChildTasks(userId: string, taskId: string): Promise<ChildTask[]> {
+  return withUser(userId, async (tx) => {
+    const rows = await tx.execute<ChildTask & {
+      issue_category: string | null;
+      issue_type: string | null;
+      workspace_id: string;
+    }>(sql`
+      select c.id, c.title, c.status, c.version, p.issue_category, p.issue_type, p.workspace_id
+      from tasks c
+      join tasks p on p.id = c.parent_task_id
+      where c.parent_task_id = ${taskId}::uuid
+        and c.deleted_at is null
+      order by c.created_at asc
+    `);
+    const first = rows[0];
+    if (!first) return [];
+    await requireAction(tx, first.workspace_id, "task.read");
+    const order = (issueType(first.issue_category, first.issue_type)?.subtasks ?? []).map(
+      (subtask) => subtask.title,
+    );
+    return [...rows].sort((a, b) => {
+      const ai = order.indexOf(a.title);
+      const bi = order.indexOf(b.title);
+      if (ai === -1 && bi === -1) return a.title.localeCompare(b.title);
+      if (ai === -1) return 1;
+      if (bi === -1) return -1;
+      return ai - bi;
+    });
+  });
+}
+
 export async function listTasks(
   userId: string,
   workspaceId: string,
@@ -315,6 +363,7 @@ export async function listTasks(
       left join integrations i on i.id = c.integration_id
       left join "user" u on u.id = t.assignee_user_id
       where t.workspace_id = ${workspaceId}::uuid
+        and t.parent_task_id is null
         and (${filter.includeDeleted ?? false} or t.deleted_at is null)
         and (
           cardinality(${productFilter}) = 0
@@ -449,6 +498,10 @@ export async function createTask(userId: string, workspaceId: string, input: Tas
         return true;
       }) as CanonicalField[]);
     }
+    const kind = issueType(input.issueCategory, input.issueType);
+    if ((input.issueCategory || input.issueType) && !kind) {
+      throw new Error("Choose an issue category and type");
+    }
     const assigneeProvider = input.assigneeUserId
       ? ((connection?.field_mappings as { assignees?: Record<string, string> } | null)?.assignees?.[input.assigneeUserId] ?? null)
       : null;
@@ -460,12 +513,16 @@ export async function createTask(userId: string, workspaceId: string, input: Tas
     }
     const inserted = await tx.execute<{ id: string }>(sql`
       insert into tasks (
-        workspace_id, project_id, milestone_id, title, description, status, priority, due_at,
+        workspace_id, project_id, milestone_id, parent_task_id, issue_category, issue_type,
+        title, description, status, priority, due_at,
         assignee_user_id, assignee_provider_id, provider, sync_state, created_by
       ) values (
         ${workspaceId}::uuid,
         ${input.projectId}::uuid,
         ${input.milestoneId ?? null}::uuid,
+        null,
+        ${kind ? input.issueCategory ?? null : null},
+        ${kind ? input.issueType ?? null : null},
         ${title},
         ${input.description?.trim() ?? ""},
         ${status},
@@ -504,7 +561,28 @@ export async function createTask(userId: string, workspaceId: string, input: Tas
         touched: ["title", "description", "status", "priority"],
       });
     }
-    await writeAudit(tx, { workspaceId, action: "task.created", entityType: "task", entityId: id, metadata: { projectId: project.id } });
+    if (kind) {
+      for (const subtask of kind.subtasks) {
+        await tx.execute(sql`
+          insert into tasks (
+            workspace_id, project_id, parent_task_id, title, description, status, priority,
+            provider, sync_state, created_by
+          ) values (
+            ${workspaceId}::uuid,
+            ${input.projectId}::uuid,
+            ${id}::uuid,
+            ${subtask.title},
+            ${subtask.description},
+            'open',
+            'low',
+            null,
+            'synced',
+            current_setting('app.current_user_id', true)
+          )
+        `);
+      }
+    }
+    await writeAudit(tx, { workspaceId, action: "task.created", entityType: "task", entityId: id, metadata: { projectId: project.id, issueCategory: input.issueCategory ?? null, issueType: input.issueType ?? null, subtasks: kind?.subtasks.length ?? 0 } });
     return id;
   });
 }
@@ -529,8 +607,12 @@ export async function updateTask(
       provider: ProviderId | null;
       version: number;
       provider_task_id: string | null;
+      parent_task_id: string | null;
+      issue_category: string | null;
+      issue_type: string | null;
     }>(sql`
-      select t.id, t.project_id, p.ownership_mode, t.provider, t.version, e.provider_id as provider_task_id
+      select t.id, t.project_id, p.ownership_mode, t.provider, t.version, e.provider_id as provider_task_id,
+        t.parent_task_id, t.issue_category, t.issue_type
       from tasks t
       join projects p on p.id = t.project_id
       left join external_records e on e.local_entity_id = t.id and e.entity_type = 'issue' and e.deleted_at is null
@@ -539,6 +621,19 @@ export async function updateTask(
     const task = existing[0];
     if (!task) throw new Error("Task not found");
     if (task.ownership_mode === "hybrid") throw new Error("Hybrid ownership is reserved and is not enabled");
+    if (task.parent_task_id && (input.issueCategory !== undefined || input.issueType !== undefined)) {
+      throw new Error("Subtasks cannot have their own category");
+    }
+    const kindChanging = input.issueCategory !== undefined || input.issueType !== undefined;
+    const nextCategory = kindChanging ? (input.issueCategory ?? null) : task.issue_category;
+    const nextType = kindChanging ? (input.issueType ?? null) : task.issue_type;
+    const kind = issueType(nextCategory, nextType);
+    if (kindChanging && (nextCategory || nextType) && !kind) {
+      throw new Error("Choose an issue category and type");
+    }
+    if (kindChanging && Boolean(nextCategory) !== Boolean(nextType)) {
+      throw new Error("Choose an issue category and type");
+    }
     const touched: CanonicalField[] = [];
     if (input.title !== undefined) touched.push("title");
     if (input.description !== undefined) touched.push("description");
@@ -547,7 +642,7 @@ export async function updateTask(
     if (input.dueAt !== undefined) touched.push("dueAt");
     if (input.assigneeUserId !== undefined) touched.push("assignee");
     const connection = await loadConnection(tx, task.project_id);
-    const pushes = task.ownership_mode === "external" || Boolean(connection?.publish_outbound);
+    const pushes = !task.parent_task_id && (task.ownership_mode === "external" || Boolean(connection?.publish_outbound));
     if (pushes && connection) {
       assertSupported(connection.provider, touched);
       if (!connection.credential_ciphertext || connection.status !== "connected") {
@@ -573,12 +668,43 @@ export async function updateTask(
         assignee_user_id = case when ${input.assigneeUserId !== undefined} then ${input.assigneeUserId ?? null} else assignee_user_id end,
         assignee_provider_id = case when ${assigneeProvider !== undefined} then ${assigneeProvider ?? null} else assignee_provider_id end,
         milestone_id = case when ${input.milestoneId !== undefined} then ${input.milestoneId ?? null}::uuid else milestone_id end,
+        issue_category = case when ${kindChanging} then ${kind ? nextCategory : null} else issue_category end,
+        issue_type = case when ${kindChanging} then ${kind ? nextType : null} else issue_type end,
         sync_state = case when ${pushes} then 'pending' else sync_state end,
         version = version + 1
       where id = ${taskId}::uuid and version = ${input.version} and deleted_at is null
       returning id
     `);
     if (!updated[0]) throw new Error("This task changed while you were editing. Reload it and try again.");
+    if (kindChanging && kind) {
+      const children = await tx.execute<{ count: number }>(sql`
+        select count(*)::int as count
+        from tasks
+        where parent_task_id = ${taskId}::uuid
+          and deleted_at is null
+      `);
+      if ((children[0]?.count ?? 0) === 0) {
+        for (const subtask of kind.subtasks) {
+          await tx.execute(sql`
+            insert into tasks (
+              workspace_id, project_id, parent_task_id, title, description, status, priority,
+              provider, sync_state, created_by
+            ) values (
+              ${workspaceId}::uuid,
+              ${task.project_id}::uuid,
+              ${taskId}::uuid,
+              ${subtask.title},
+              ${subtask.description},
+              'open',
+              'low',
+              null,
+              'synced',
+              current_setting('app.current_user_id', true)
+            )
+          `);
+        }
+      }
+    }
     if (pushes && connection && touched.length > 0) {
       await enqueueOutbox(tx, {
         workspaceId,
@@ -592,7 +718,18 @@ export async function updateTask(
         touched,
       });
     }
-    await writeAudit(tx, { workspaceId, action: "task.updated", entityType: "task", entityId: taskId, metadata: { fields: touched } });
+    await writeAudit(tx, {
+      workspaceId,
+      action: "task.updated",
+      entityType: "task",
+      entityId: taskId,
+      metadata: {
+        fields: touched,
+        ...(kindChanging
+          ? { issueCategory: kind ? nextCategory : null, issueType: kind ? nextType : null }
+          : {}),
+      },
+    });
   });
 }
 
@@ -670,6 +807,15 @@ export async function deleteTasks(
         returning id
       `);
       if (!removed[0]) throw new Error("One of the selected tasks is no longer available");
+
+      await tx.execute(sql`
+        update tasks
+        set deleted_at = coalesce(deleted_at, now()),
+            version = version + 1
+        where parent_task_id = ${taskId}::uuid
+          and workspace_id = ${workspaceId}::uuid
+          and deleted_at is null
+      `);
 
       await tx.execute(sql`
         update external_records
@@ -806,6 +952,8 @@ export async function transferTasks(
       dueAt: task.due_at ? new Date(task.due_at).toISOString() : null,
       assigneeUserId: keepAssignee ? task.assignee_user_id : null,
       milestoneId: null,
+      issueCategory: task.issue_category,
+      issueType: task.issue_type,
     });
     idMap.set(task.id, newId);
 
@@ -837,6 +985,15 @@ export async function transferTasks(
         returning id
       `);
       if (!removed[0]) throw new Error("One of the selected tasks is no longer available");
+
+      await tx.execute(sql`
+        update tasks
+        set deleted_at = coalesce(deleted_at, now()),
+            version = version + 1
+        where parent_task_id = ${task.id}::uuid
+          and workspace_id = ${sourceWorkspaceId}::uuid
+          and deleted_at is null
+      `);
 
       await tx.execute(sql`
         delete from task_links

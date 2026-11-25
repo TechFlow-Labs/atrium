@@ -19,6 +19,8 @@ import {
   type RelationDescriptor,
   type TaskLinkEdge,
 } from "@/lib/task-link-groups";
+import { IssueCategoryIcon, IssueTypeIcon } from "@/components/issue-kind-icons";
+import { issueKindLabel } from "@/lib/issue-kinds";
 import { cn, formatWhen } from "@/lib/utils";
 
 function taskProviderAccent(provider: string | null | undefined) {
@@ -39,6 +41,8 @@ export type TaskListItem = {
   projectName: string;
   codebaseLabel?: string | null;
   assigneeLabel: string | null;
+  issueCategory?: string | null;
+  issueType?: string | null;
 };
 
 function groupTasksByProject(tasks: TaskListItem[]): Array<{
@@ -363,6 +367,13 @@ function TaskListRow({
                 ) : null}
               </>
             )}
+            {issueKindLabel(task.issueCategory, task.issueType) ? (
+              <Badge tone="neutral" className="gap-1">
+                <IssueCategoryIcon categoryId={task.issueCategory} className="size-3.5" />
+                <IssueTypeIcon typeId={task.issueType} className="size-3.5" />
+                {issueKindLabel(task.issueCategory, task.issueType)}
+              </Badge>
+            ) : null}
             <Badge
               tone={task.assigneeLabel ? "due" : "none"}
               className={task.assigneeLabel ? "normal-case" : undefined}
