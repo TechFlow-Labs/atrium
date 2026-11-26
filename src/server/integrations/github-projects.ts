@@ -326,6 +326,7 @@ function pickStatusOption(
 
   const aliases: Record<TaskStatus, string[]> = {
     open: ["todo", "backlog", "ready", "new", "triage", "open"],
+    todo: ["todo", "to do", "backlog", "ready", "open"],
     in_progress: ["in progress", "in_progress", "doing", "started", "progress"],
     blocked: ["blocked", "on hold", "waiting"],
     done: ["done", "complete", "completed", "finished", "closed"],

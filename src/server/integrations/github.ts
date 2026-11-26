@@ -56,6 +56,7 @@ function defaultMappings(): FieldMappings {
     // (Todo / In Progress / Done) via heuristics or explicit mappings on the project page.
     status: {
       open: "Todo",
+      todo: "Todo",
       in_progress: "In Progress",
       blocked: "In Progress",
       done: "Done",

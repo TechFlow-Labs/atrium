@@ -54,7 +54,7 @@ type GtComment = {
 
 function defaultMappings(): FieldMappings {
   return {
-    status: { open: "open", in_progress: "open", blocked: "open", done: "closed", cancelled: "closed" },
+    status: { open: "open", todo: "open", in_progress: "open", blocked: "open", done: "closed", cancelled: "closed" },
     priority: {
       none: "priority:none",
       low: "priority:low",

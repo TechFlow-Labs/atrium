@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRef, useState, useTransition } from "react";
-import { CalendarDays, Clock3, FolderKanban, UserRound } from "lucide-react";
+import { Bot, CalendarDays, Clock3, FolderKanban, UserRound } from "lucide-react";
 import { updateTaskDetailAction } from "@/app/actions";
 import { MarkdownContent } from "@/components/markdown-content";
 import { TaskIssueKind } from "@/components/task-issue-kind";
@@ -20,6 +20,7 @@ function dueInputValue(dueAt: Date | string | null): string {
 
 const STATUS_OPTIONS = [
   { value: "open", label: "Open", icon: <StatusIcon status="open" /> },
+  { value: "todo", label: "To do", icon: <StatusIcon status="todo" /> },
   { value: "in_progress", label: "In progress", icon: <StatusIcon status="in_progress" /> },
   { value: "blocked", label: "Blocked", icon: <StatusIcon status="blocked" /> },
   { value: "done", label: "Done", icon: <StatusIcon status="done" /> },
@@ -36,6 +37,7 @@ const PRIORITY_OPTIONS = [
 
 const BADGE_TRIGGER: Record<string, string> = {
   open: "border-sky-500/30 bg-sky-500/10 text-sky-800 dark:text-sky-200",
+  todo: "border-violet-500/30 bg-violet-500/10 text-violet-900 dark:text-violet-200",
   in_progress: "border-amber-500/30 bg-amber-500/10 text-amber-900 dark:text-amber-200",
   blocked: "border-rose-500/30 bg-rose-500/10 text-rose-800 dark:text-rose-200",
   done: "border-emerald-500/30 bg-emerald-500/10 text-emerald-800 dark:text-emerald-200",
@@ -59,6 +61,8 @@ export function TaskDetailForm({
   projectId,
   projectName,
   assigneeLabel,
+  assigneeUserId = null,
+  assignees = [],
   updatedAt,
   syncState,
   canWrite,
@@ -77,6 +81,8 @@ export function TaskDetailForm({
   projectId: string;
   projectName: string;
   assigneeLabel: string | null;
+  assigneeUserId?: string | null;
+  assignees?: { userId: string; name: string; agent: boolean }[];
   updatedAt: Date | string;
   syncState: string;
   canWrite: boolean;
@@ -94,11 +100,15 @@ export function TaskDetailForm({
   const [savedFlash, setSavedFlash] = useState(false);
   const [pending, startTransition] = useTransition();
   const [version, setVersion] = useState(initialVersion);
+  const [assigneeId, setAssigneeId] = useState(assigneeUserId || "unassigned");
   const titleRef = useRef(initialTitle);
   const descriptionRef = useRef(initialDescription);
   const dueRef = useRef(dueInputValue(initialDueAt));
   const versionRef = useRef(initialVersion);
-  function saveField(field: "title" | "description" | "status" | "priority" | "dueAt", value: string) {
+  function saveField(
+    field: "title" | "description" | "status" | "priority" | "dueAt" | "assigneeUserId",
+    value: string,
+  ) {
     if (!canWrite) return;
     startTransition(async () => {
       const formData = new FormData();
@@ -299,7 +309,36 @@ export function TaskDetailForm({
           <UserRound className="mt-0.5 size-4 shrink-0 text-muted" aria-hidden="true" />
           <div className="min-w-0">
             <dt className="text-xs uppercase tracking-wide text-muted">Assignee</dt>
-            <dd className="mt-0.5">{assigneeLabel || "Unassigned"}</dd>
+            <dd className="mt-0.5">
+              {canWrite ? (
+                <MenuSelect
+                  id="task-detail-assignee"
+                  value={assigneeId}
+                  aria-label="Assignee"
+                  className="w-auto"
+                  triggerClassName="h-7 w-auto px-0"
+                  options={[
+                    { value: "unassigned", label: "Unassigned", icon: <UserRound className="size-3.5 text-muted" /> },
+                    ...assignees.map((person) => ({
+                      value: person.userId,
+                      label: person.agent ? `${person.name} · agent` : person.name,
+                      icon: person.agent ? (
+                        <Bot className="size-3.5 text-muted" />
+                      ) : (
+                        <UserRound className="size-3.5 text-muted" />
+                      ),
+                    })),
+                  ]}
+                  onValueChange={(next) => {
+                    if (next === assigneeId) return;
+                    setAssigneeId(next);
+                    saveField("assigneeUserId", next === "unassigned" ? "" : next);
+                  }}
+                />
+              ) : (
+                assigneeLabel || "Unassigned"
+              )}
+            </dd>
           </div>
         </div>
         <div className="flex gap-3">

@@ -2,12 +2,14 @@ import { Suspense } from "react";
 import { ScreenLoader } from "@/components/screen-loader";
 import { connection } from "next/server";
 import { redirect } from "next/navigation";
+import { AgentsPanel } from "@/components/agents-panel";
 import { IntegrationsOnboarding } from "@/components/integrations-onboarding";
 import { McpPanel } from "@/components/mcp-panel";
 import { getSessionUser } from "@/server/auth/session";
 import { workspaceContext } from "@/server/auth/workspace";
 import { providerCatalog } from "@/server/integrations/catalog";
 import { listIntegrations } from "@/server/integrations/service";
+import { listWorkspaceAgents } from "@/server/agents/service";
 import { listMcpTokens, mcpServerUrl } from "@/server/mcp/tokens";
 
 export const instant = false;
@@ -33,9 +35,10 @@ async function IntegrationsContent({
   const user = await getSessionUser();
   if (!user) redirect("/login");
   const { workspaces, current } = await workspaceContext(user.id);
-  const [integrations, tokens] = await Promise.all([
+  const [integrations, tokens, agents] = await Promise.all([
     listIntegrations(user.id, current.id),
     listMcpTokens(user.id),
+    listWorkspaceAgents(user.id, current.id),
   ]);
   const canAdmin = current.role === "owner" || current.role === "admin";
   const { providers, oauth, githubApp } = await providerCatalog(user.id, current.id);
@@ -55,6 +58,7 @@ async function IntegrationsContent({
           error={params.error ?? null}
         />
       </div>
+      <AgentsPanel workspaceId={current.id} agents={agents} canAdmin={canAdmin} />
       <div data-tour="integrations-mcp">
         <McpPanel
           serverUrl={mcpServerUrl()}

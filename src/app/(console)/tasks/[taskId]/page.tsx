@@ -15,6 +15,7 @@ import { workspaceContext } from "@/server/auth/workspace";
 import { TaskSubtasks } from "@/components/task-subtasks";
 import { listTaskComments } from "@/server/tasks/comments";
 import { listTaskLinks } from "@/server/tasks/links";
+import { listAssigneeChoices } from "@/server/agents/service";
 import { getTask, listChildTasks } from "@/server/tasks/service";
 
 export const instant = false;
@@ -45,11 +46,13 @@ async function TaskDetailContent({
   if (!UUID_RE.test(taskId)) notFound();
 
   const { workspaces } = await workspaceContext(user.id);
-  const [task, commentBundle, links, subtasks] = await Promise.all([
-    getTask(user.id, taskId),
+  const task = await getTask(user.id, taskId);
+  if (!task) notFound();
+  const [commentBundle, links, subtasks, assignees] = await Promise.all([
     listTaskComments(user.id, taskId),
     listTaskLinks(user.id, taskId),
     listChildTasks(user.id, taskId),
+    listAssigneeChoices(user.id, task.workspace_id),
   ]);
   if (!task || !commentBundle || !links) notFound();
   const parent = task.parent_task_id ? await getTask(user.id, task.parent_task_id) : null;
@@ -129,6 +132,8 @@ async function TaskDetailContent({
               projectId={task.project_id}
               projectName={task.project_name}
               assigneeLabel={task.assignee_label}
+              assigneeUserId={task.assignee_user_id}
+              assignees={assignees}
               updatedAt={task.updated_at}
               syncState={task.sync_state}
               canWrite={canWrite}

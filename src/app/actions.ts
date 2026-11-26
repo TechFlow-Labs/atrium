@@ -83,6 +83,7 @@ import {
 import { markGuideSeen } from "@/server/guides/service";
 import { parseProjectsLayout, type ProjectsLayout } from "@/lib/projects-layout";
 import { parseColorPalette, parseThemeMode } from "@/lib/theme";
+import { createWorkspaceAgent, disableWorkspaceAgent } from "@/server/agents/service";
 import { createMcpToken, revokeMcpToken } from "@/server/mcp/tokens";
 import { createWorkspaceNote } from "@/server/notes/workspace-notes";
 import {
@@ -1371,6 +1372,30 @@ export async function createMcpTokenAction(_state: ActionState, formData: FormDa
 export async function revokeMcpTokenAction(formData: FormData): Promise<void> {
   const id = await userId();
   await revokeMcpToken(id, String(formData.get("tokenId") ?? ""));
+  revalidatePath("/integrations");
+}
+
+export async function createWorkspaceAgentAction(_state: ActionState, formData: FormData): Promise<ActionState> {
+  try {
+    const created = await createWorkspaceAgent(await userId(), String(formData.get("workspaceId") ?? ""), {
+      name: String(formData.get("name") ?? ""),
+      webhookUrl: String(formData.get("webhookUrl") ?? ""),
+      webhookSecret: String(formData.get("webhookSecret") ?? ""),
+    });
+    revalidatePath("/integrations");
+    return { token: created.token, notice: "Agent created. Copy the MCP token now. It is shown once." };
+  } catch (error) {
+    unstable_rethrow(error);
+    return { error: error instanceof Error ? error.message : "Could not create the agent" };
+  }
+}
+
+export async function disableWorkspaceAgentAction(formData: FormData): Promise<void> {
+  await disableWorkspaceAgent(
+    await userId(),
+    String(formData.get("workspaceId") ?? ""),
+    String(formData.get("agentId") ?? ""),
+  );
   revalidatePath("/integrations");
 }
 

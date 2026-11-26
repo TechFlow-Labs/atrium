@@ -108,12 +108,12 @@ function productStatsSelect(showMocks: boolean) {
     ) as projects,
     count(t.id) filter (where t.deleted_at is null)::int as total_issues,
     count(t.id) filter (
-      where t.deleted_at is null and t.status in ('open', 'in_progress', 'blocked')
+      where t.deleted_at is null and t.status in ('open', 'todo', 'in_progress', 'blocked')
     )::int as open_issues,
     count(t.id) filter (where t.deleted_at is null and t.status = 'in_progress')::int as in_progress_issues,
     count(t.id) filter (
       where t.deleted_at is null
-        and t.status in ('open', 'in_progress', 'blocked')
+        and t.status in ('open', 'todo', 'in_progress', 'blocked')
         and t.priority in ('urgent', 'high')
     )::int as attention_issues,
     count(t.id) filter (where t.deleted_at is null and t.status = 'blocked')::int as blocked_issues,
@@ -296,6 +296,7 @@ export async function getProductsAnalytics(
     const issueRows = await tx.execute<{
       total: number;
       open: number;
+      todo: number;
       in_progress: number;
       blocked: number;
       done: number;
@@ -305,11 +306,12 @@ export async function getProductsAnalytics(
       select
         count(*)::int as total,
         count(*) filter (where t.status = 'open')::int as open,
+        count(*) filter (where t.status = 'todo')::int as todo,
         count(*) filter (where t.status = 'in_progress')::int as in_progress,
         count(*) filter (where t.status = 'blocked')::int as blocked,
         count(*) filter (where t.status = 'done')::int as done,
         count(*) filter (
-          where t.status in ('open', 'in_progress', 'blocked')
+          where t.status in ('open', 'todo', 'in_progress', 'blocked')
             and t.priority in ('urgent', 'high')
         )::int as attention,
         count(*) filter (
@@ -331,13 +333,14 @@ export async function getProductsAnalytics(
     const issues = issueRows[0] ?? {
       total: 0,
       open: 0,
+      todo: 0,
       in_progress: 0,
       blocked: 0,
       done: 0,
       attention: 0,
       due_soon: 0,
     };
-    const activeIssues = issues.open + issues.in_progress + issues.blocked + issues.done;
+    const activeIssues = issues.open + issues.todo + issues.in_progress + issues.blocked + issues.done;
     const completion = activeIssues === 0 ? 0 : Math.round((issues.done / activeIssues) * 100);
 
     return {

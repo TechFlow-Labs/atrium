@@ -1,7 +1,10 @@
 import type { FieldMappings, TaskPriority, TaskStatus } from "./types";
 
 export function mapStatusToProvider(mappings: FieldMappings, status: TaskStatus): string {
-  return mappings.status?.[status] ?? status;
+  const mapped = mappings.status?.[status];
+  if (mapped) return mapped;
+  if (status === "todo") return mappings.status?.open ?? "open";
+  return status;
 }
 
 export function mapStatusFromProvider(mappings: FieldMappings, value: string | null | undefined): TaskStatus {

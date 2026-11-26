@@ -49,7 +49,7 @@ const COMMENT_FIELDS = `id body createdAt url user { id name }`;
 
 function defaultMappings(): FieldMappings {
   return {
-    status: { open: "unstarted", in_progress: "started", blocked: "started", done: "completed", cancelled: "canceled" },
+    status: { open: "unstarted", todo: "unstarted", in_progress: "started", blocked: "started", done: "completed", cancelled: "canceled" },
     priority: { none: "0", low: "4", medium: "3", high: "2", urgent: "1" },
     assignees: {},
   };

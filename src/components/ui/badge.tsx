@@ -3,6 +3,7 @@ import { cn } from "@/lib/utils";
 const tones: Record<string, string> = {
   neutral: "bg-accent text-foreground",
   open: "bg-sky-100 text-sky-900 dark:bg-sky-500/20 dark:text-sky-100",
+  todo: "bg-violet-100 text-violet-950 dark:bg-violet-500/20 dark:text-violet-100",
   in_progress: "bg-amber-100 text-amber-950 dark:bg-amber-500/20 dark:text-amber-100",
   blocked: "bg-rose-100 text-rose-900 dark:bg-rose-500/20 dark:text-rose-100",
   done: "bg-emerald-100 text-emerald-950 dark:bg-emerald-500/20 dark:text-emerald-100",

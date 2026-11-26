@@ -37,6 +37,7 @@ type PickerOption = {
 
 const STATUS_OPTIONS: PickerOption[] = [
   { value: "open", label: "Open", icon: <StatusIcon status="open" /> },
+  { value: "todo", label: "To do", icon: <StatusIcon status="todo" /> },
   { value: "in_progress", label: "In progress", icon: <StatusIcon status="in_progress" /> },
   { value: "blocked", label: "Blocked", icon: <StatusIcon status="blocked" /> },
   { value: "done", label: "Done", icon: <StatusIcon status="done" /> },

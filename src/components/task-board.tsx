@@ -23,12 +23,21 @@ function taskProviderAccent(provider: string | null | undefined) {
   return providerAccents[providerKey(provider)] ?? providerAccents.native!;
 }
 
-const COLUMNS = ["open", "in_progress", "blocked", "done", "cancelled"] as const;
+const COLUMNS = ["open", "todo", "in_progress", "blocked", "done", "cancelled"] as const;
 type BoardStatus = (typeof COLUMNS)[number];
+
+const COLUMN_LABELS: Record<BoardStatus, string> = {
+  open: "Open",
+  todo: "To do",
+  in_progress: "In progress",
+  blocked: "Blocked",
+  done: "Done",
+  cancelled: "Cancelled",
+};
 
 const STATUS_OPTIONS = COLUMNS.map((status) => ({
   value: status,
-  label: status.replace("_", " "),
+  label: COLUMN_LABELS[status],
 }));
 
 type BoardTask = {
@@ -458,7 +467,7 @@ export function TaskBoard({
             >
               <h2 className="flex shrink-0 items-center gap-1.5 text-sm font-medium capitalize">
                 <StatusIcon status={column} className="size-3.5" />
-                {column.replace("_", " ")}
+                {COLUMN_LABELS[column]}
                 <span className="ml-auto text-xs font-normal text-muted">{columnTasks.length}</span>
               </h2>
               <div

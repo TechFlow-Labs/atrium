@@ -3,6 +3,7 @@ import {
   CheckCircle2,
   Circle,
   CircleDot,
+  ListTodo,
   CircleSlash,
   CloudOff,
   Flame,
@@ -19,6 +20,7 @@ import { cn } from "@/lib/utils";
 
 const STATUS_ICONS: Record<string, { icon: LucideIcon; className: string }> = {
   open: { icon: Circle, className: "text-sky-500" },
+  todo: { icon: ListTodo, className: "text-violet-500" },
   in_progress: { icon: CircleDot, className: "text-amber-500" },
   blocked: { icon: AlertTriangle, className: "text-rose-500" },
   done: { icon: CheckCircle2, className: "text-emerald-500" },

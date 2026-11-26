@@ -111,7 +111,7 @@ export async function homeFeed(userId: string, workspaceId: string, now: number,
       where t.workspace_id = ${workspaceId}::uuid
         and t.parent_task_id is null
         and t.deleted_at is null
-        and t.status in ('open', 'in_progress', 'blocked')
+        and t.status in ('open', 'todo', 'in_progress', 'blocked')
         and t.priority in ('urgent', 'high')
         and ${taskSourceMatch}
         and ${mockProjectOk}
@@ -260,7 +260,7 @@ export async function homeFeed(userId: string, workspaceId: string, now: number,
             and ${mockTaskOk}) as blocked_count,
         (select count(*)::int from tasks t
           where t.workspace_id = ${workspaceId}::uuid and t.parent_task_id is null and t.deleted_at is null
-            and t.status in ('open', 'in_progress', 'blocked')
+            and t.status in ('open', 'todo', 'in_progress', 'blocked')
             and t.priority in ('urgent', 'high')
             and ${taskSourceMatch}
             and ${mockTaskOk}) as attention_count,

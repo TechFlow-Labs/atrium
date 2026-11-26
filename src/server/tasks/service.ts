@@ -6,6 +6,8 @@ import { withUser, type Tx } from "../db/client";
 import { textArray } from "../db/sql";
 import { areDevMocksVisible, sqlDevMockProjectVisible } from "../dev/mock-data";
 import { issueType } from "@/lib/issue-kinds";
+import { enqueueAgentDispatch } from "../agents/service";
+import { kickAgentDispatch } from "../agents/dispatch";
 import { projectIssueLabels } from "@/lib/project-display";
 import { getAdapter } from "../integrations/registry";
 import type { ProviderId, TaskPriority, TaskStatus } from "../integrations/types";
@@ -124,11 +126,11 @@ export type TaskInput = {
   issueType?: string | null;
 };
 
-const STATUSES = new Set(["open", "in_progress", "blocked", "done", "cancelled"]);
+const STATUSES = new Set(["open", "todo", "in_progress", "blocked", "done", "cancelled"]);
 const PRIORITIES = new Set(["none", "low", "medium", "high", "urgent"]);
 
 function assertStatus(value: string): asserts value is TaskStatus {
-  if (!STATUSES.has(value)) throw new Error("Status must be open, in progress, blocked, done, or cancelled");
+  if (!STATUSES.has(value)) throw new Error("Status must be open, to do, in progress, blocked, done, or cancelled");
 }
 function assertPriority(value: string): asserts value is TaskPriority {
   if (!PRIORITIES.has(value)) throw new Error("Priority must be none, low, medium, high, or urgent");
@@ -456,6 +458,12 @@ export async function listTaskAssignees(
             or nullif(t.assignee_provider_id, '') is not null
             or nullif(t.assignee_label, '') is not null
           )
+        union all
+        select a.user_id as value, u.name as label
+        from workspace_agents a
+        join "user" u on u.id = a.user_id
+        where a.workspace_id = ${workspaceId}::uuid
+          and a.disabled_at is null
       ) assignees
       where value is not null and label is not null
       order by lower(value), label
@@ -473,7 +481,8 @@ export async function createTask(userId: string, workspaceId: string, input: Tas
   const priority = input.priority ?? "medium";
   assertStatus(status);
   assertPriority(priority);
-  return withUser(userId, async (tx) => {
+  let dispatchId: string | null = null;
+  const taskId = await withUser(userId, async (tx) => {
     await requireAction(tx, workspaceId, "task.write");
     const projects = await tx.execute<{ id: string; ownership_mode: string; status: string }>(sql`
       select id, ownership_mode, status from projects
@@ -583,8 +592,23 @@ export async function createTask(userId: string, workspaceId: string, input: Tas
       }
     }
     await writeAudit(tx, { workspaceId, action: "task.created", entityType: "task", entityId: id, metadata: { projectId: project.id, issueCategory: input.issueCategory ?? null, issueType: input.issueType ?? null, subtasks: kind?.subtasks.length ?? 0 } });
+    if (status === "todo" && input.assigneeUserId) {
+      dispatchId = await enqueueAgentDispatch(tx, {
+        workspaceId,
+        taskId: id,
+        version: 1,
+        assigneeUserId: input.assigneeUserId,
+        title,
+        description: input.description?.trim() ?? "",
+        projectId: input.projectId,
+        issueCategory: kind ? (input.issueCategory ?? null) : null,
+        issueType: kind ? (input.issueType ?? null) : null,
+      });
+    }
     return id;
   });
+  kickAgentDispatch(dispatchId);
+  return taskId;
 }
 
 export async function updateTask(
@@ -598,6 +622,7 @@ export async function updateTask(
   }
   if (input.status) assertStatus(input.status);
   if (input.priority) assertPriority(input.priority);
+  let dispatchId: string | null = null;
   await withUser(userId, async (tx) => {
     await requireAction(tx, workspaceId, "task.write");
     const existing = await tx.execute<{
@@ -610,9 +635,13 @@ export async function updateTask(
       parent_task_id: string | null;
       issue_category: string | null;
       issue_type: string | null;
+      status: TaskStatus;
+      assignee_user_id: string | null;
+      title: string;
+      description: string;
     }>(sql`
       select t.id, t.project_id, p.ownership_mode, t.provider, t.version, e.provider_id as provider_task_id,
-        t.parent_task_id, t.issue_category, t.issue_type
+        t.parent_task_id, t.issue_category, t.issue_type, t.status, t.assignee_user_id, t.title, t.description
       from tasks t
       join projects p on p.id = t.project_id
       left join external_records e on e.local_entity_id = t.id and e.entity_type = 'issue' and e.deleted_at is null
@@ -730,7 +759,28 @@ export async function updateTask(
           : {}),
       },
     });
+    const nextStatus = input.status ?? task.status;
+    const nextAssignee = input.assigneeUserId !== undefined ? input.assigneeUserId : task.assignee_user_id;
+    const enteredTodo = task.status !== "todo" && nextStatus === "todo";
+    const assignedWhileTodo =
+      nextStatus === "todo" &&
+      input.assigneeUserId !== undefined &&
+      input.assigneeUserId !== task.assignee_user_id;
+    if (!task.parent_task_id && nextAssignee && (enteredTodo || assignedWhileTodo)) {
+      dispatchId = await enqueueAgentDispatch(tx, {
+        workspaceId,
+        taskId,
+        version: input.version + 1,
+        assigneeUserId: nextAssignee,
+        title: input.title?.trim() ?? task.title,
+        description: input.description ?? task.description,
+        projectId: task.project_id,
+        issueCategory: kindChanging ? (kind ? nextCategory : null) : task.issue_category,
+        issueType: kindChanging ? (kind ? nextType : null) : task.issue_type,
+      });
+    }
   });
+  kickAgentDispatch(dispatchId);
 }
 
 export async function bulkUpdateTasks(

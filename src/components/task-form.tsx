@@ -468,6 +468,7 @@ export function TaskForm({
                 aria-label="Status"
                 options={[
                   { value: "open", label: "Open" },
+                  { value: "todo", label: "To do" },
                   { value: "in_progress", label: "In progress" },
                   { value: "blocked", label: "Blocked" },
                   { value: "done", label: "Done" },

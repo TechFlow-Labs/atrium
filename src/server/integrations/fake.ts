@@ -28,7 +28,7 @@ const CAPABILITIES = {
 
 function defaultMappings(): FieldMappings {
   return {
-    status: { open: "open", in_progress: "in_progress", blocked: "blocked", done: "done", cancelled: "cancelled" },
+    status: { open: "open", todo: "open", in_progress: "in_progress", blocked: "blocked", done: "done", cancelled: "cancelled" },
     priority: { none: "none", low: "low", medium: "medium", high: "high", urgent: "urgent" },
     assignees: {},
   };

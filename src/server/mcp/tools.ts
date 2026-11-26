@@ -2,6 +2,7 @@ import type { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
 import { homeFeed, searchWorkspace } from "../home/service";
 import { createNativeProject, getProject, listProjects } from "../projects/service";
+import { addTaskComment, listTaskComments } from "../tasks/comments";
 import { createTask, getTask, listTasks, updateTask } from "../tasks/service";
 import { listWorkspaces } from "../workspaces/service";
 import { mcpAuthExtra, requireMcpScope, resolveWorkspaceId } from "./auth";
@@ -20,7 +21,7 @@ function errorResult(error: unknown) {
   };
 }
 
-const statusSchema = z.enum(["open", "in_progress", "blocked", "done", "cancelled"]);
+const statusSchema = z.enum(["open", "todo", "in_progress", "blocked", "done", "cancelled"]);
 const prioritySchema = z.enum(["none", "low", "medium", "high", "urgent"]);
 
 export function registerAtriumMcpTools(server: McpServer) {
@@ -110,6 +111,7 @@ export function registerAtriumMcpTools(server: McpServer) {
         workspaceId: z.string().uuid().optional(),
         projectId: z.string().uuid().optional(),
         status: z.string().optional().describe("Comma-separated statuses, or attention for urgent/high"),
+        assignee: z.string().optional().describe("Assignee user id, or unassigned"),
         priority: z.string().optional(),
         query: z.string().optional(),
         dueBefore: z.string().optional(),
@@ -124,6 +126,7 @@ export function registerAtriumMcpTools(server: McpServer) {
         const tasks = await listTasks(auth.userId, workspaceId, {
           projectId: args.projectId,
           status: args.status,
+          assignee: args.assignee,
           priority: args.priority,
           query: args.query,
           dueBefore: args.dueBefore,
@@ -215,6 +218,7 @@ export function registerAtriumMcpTools(server: McpServer) {
         status: statusSchema.optional(),
         priority: prioritySchema.optional(),
         dueAt: z.string().nullable().optional(),
+        assigneeUserId: z.string().nullable().optional().describe("Workspace member id, or null to unassign"),
       }),
     },
     async (args, ctx) => {
@@ -234,6 +238,7 @@ export function registerAtriumMcpTools(server: McpServer) {
           status: args.status,
           priority: args.priority,
           dueAt: args.dueAt,
+          assigneeUserId: args.assigneeUserId,
           projectId: existing.project_id,
         });
         const task = await getTask(auth.userId, args.taskId);
@@ -291,6 +296,71 @@ export function registerAtriumMcpTools(server: McpServer) {
           blocked: feed.blocked,
           health: feed.health,
         });
+      } catch (error) {
+        return errorResult(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "list_comments",
+    {
+      title: "List comments",
+      description: "List Activity comments on one task.",
+      inputSchema: z.object({
+        taskId: z.string().uuid(),
+      }),
+    },
+    async (args, ctx) => {
+      try {
+        const auth = mcpAuthExtra(ctx.http?.authInfo);
+        requireMcpScope(auth, "read");
+        const bundle = await listTaskComments(auth.userId, args.taskId);
+        if (!bundle) return errorResult(new Error("Task not found"));
+        if (auth.workspaceId) {
+          const task = await getTask(auth.userId, args.taskId);
+          if (task && task.workspace_id !== auth.workspaceId) {
+            return errorResult(new Error("Task is outside this token's workspace"));
+          }
+        }
+        return textResult({
+          source: bundle.source,
+          comments: bundle.comments.map((comment) => ({
+            id: comment.id,
+            body: comment.body,
+            author: comment.authorLabel,
+            createdAt: comment.createdAt,
+          })),
+        });
+      } catch (error) {
+        return errorResult(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "add_comment",
+    {
+      title: "Add comment",
+      description: "Post an Activity comment on a task. The comment is authored as the token's user.",
+      inputSchema: z.object({
+        taskId: z.string().uuid(),
+        body: z.string().min(1).max(10_000),
+      }),
+    },
+    async (args, ctx) => {
+      try {
+        const auth = mcpAuthExtra(ctx.http?.authInfo);
+        requireMcpScope(auth, "write");
+        if (auth.workspaceId) {
+          const task = await getTask(auth.userId, args.taskId);
+          if (!task) return errorResult(new Error("Task not found"));
+          if (task.workspace_id !== auth.workspaceId) {
+            return errorResult(new Error("Task is outside this token's workspace"));
+          }
+        }
+        await addTaskComment(auth.userId, args.taskId, args.body);
+        return textResult({ ok: true });
       } catch (error) {
         return errorResult(error);
       }

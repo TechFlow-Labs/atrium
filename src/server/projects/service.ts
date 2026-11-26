@@ -151,6 +151,7 @@ export async function getProjectsAnalytics(
     const taskRows = await tx.execute<{
       total: number;
       open: number;
+      todo: number;
       in_progress: number;
       blocked: number;
       done: number;
@@ -162,12 +163,13 @@ export async function getProjectsAnalytics(
       select
         count(*)::int as total,
         count(*) filter (where t.status = 'open')::int as open,
+        count(*) filter (where t.status = 'todo')::int as todo,
         count(*) filter (where t.status = 'in_progress')::int as in_progress,
         count(*) filter (where t.status = 'blocked')::int as blocked,
         count(*) filter (where t.status = 'done')::int as done,
         count(*) filter (where t.status = 'cancelled')::int as cancelled,
         count(*) filter (
-          where t.status in ('open', 'in_progress', 'blocked')
+          where t.status in ('open', 'todo', 'in_progress', 'blocked')
             and t.priority in ('urgent', 'high')
         )::int as attention,
         count(*) filter (
@@ -204,11 +206,11 @@ export async function getProjectsAnalytics(
         p.ownership_mode,
         count(*) filter (
           where t.deleted_at is null
-            and t.status in ('open', 'in_progress', 'blocked')
+            and t.status in ('open', 'todo', 'in_progress', 'blocked')
         )::int as open_count,
         count(*) filter (
           where t.deleted_at is null
-            and t.status in ('open', 'in_progress', 'blocked')
+            and t.status in ('open', 'todo', 'in_progress', 'blocked')
             and t.priority in ('urgent', 'high')
         )::int as attention_count,
         count(*) filter (where t.deleted_at is null)::int as total_count
@@ -220,7 +222,7 @@ export async function getProjectsAnalytics(
       group by p.id, p.name, p.nickname, p.ownership_mode
       having count(*) filter (
         where t.deleted_at is null
-          and t.status in ('open', 'in_progress', 'blocked')
+          and t.status in ('open', 'todo', 'in_progress', 'blocked')
       ) > 0
       order by open_count desc, attention_count desc, coalesce(nullif(btrim(p.nickname), ''), p.name)
       limit 5
@@ -237,6 +239,7 @@ export async function getProjectsAnalytics(
     const task = taskRows[0] ?? {
       total: 0,
       open: 0,
+      todo: 0,
       in_progress: 0,
       blocked: 0,
       done: 0,
@@ -245,7 +248,7 @@ export async function getProjectsAnalytics(
       due_soon: 0,
       done_week: 0,
     };
-    const activeTasks = task.open + task.in_progress + task.blocked + task.done;
+    const activeTasks = task.open + task.todo + task.in_progress + task.blocked + task.done;
     const completion = activeTasks === 0 ? 0 : Math.round((task.done / activeTasks) * 100);
 
     return {

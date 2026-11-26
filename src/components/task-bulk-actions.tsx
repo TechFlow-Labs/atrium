@@ -188,6 +188,7 @@ export function TaskBulkActions({
 
 const STATUS_OPTIONS = [
   { value: "done", label: "Mark done" },
+  { value: "todo", label: "Move to To do" },
   { value: "open", label: "Reopen" },
   { value: "blocked", label: "Mark blocked" },
 ];

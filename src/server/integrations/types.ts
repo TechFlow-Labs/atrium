@@ -39,7 +39,7 @@ export function isTaskProvider(provider: string): provider is ProviderId {
   return (PROVIDERS as readonly string[]).includes(provider);
 }
 
-export const TASK_STATUSES = ["open", "in_progress", "blocked", "done", "cancelled"] as const;
+export const TASK_STATUSES = ["open", "todo", "in_progress", "blocked", "done", "cancelled"] as const;
 export type TaskStatus = (typeof TASK_STATUSES)[number];
 
 export const TASK_PRIORITIES = ["none", "low", "medium", "high", "urgent"] as const;

@@ -48,7 +48,7 @@ type GlNote = {
 
 function defaultMappings(): FieldMappings {
   return {
-    status: { open: "opened", in_progress: "opened", blocked: "opened", done: "closed", cancelled: "closed" },
+    status: { open: "opened", todo: "opened", in_progress: "opened", blocked: "opened", done: "closed", cancelled: "closed" },
     priority: {
       none: "priority::none",
       low: "priority::low",

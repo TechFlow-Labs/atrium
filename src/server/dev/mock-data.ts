@@ -71,7 +71,7 @@ type MockTaskSeed = {
   title: string;
   description?: string;
   priority: "none" | "low" | "medium" | "high" | "urgent";
-  status: "open" | "in_progress" | "blocked" | "done" | "cancelled";
+  status: "open" | "todo" | "in_progress" | "blocked" | "done" | "cancelled";
   dueInDays?: number | null;
 };
 

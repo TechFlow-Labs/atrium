@@ -43,7 +43,7 @@ type JiraComment = {
 
 function defaultMappings(): FieldMappings {
   return {
-    status: { open: "To Do", in_progress: "In Progress", blocked: "Blocked", done: "Done", cancelled: "Cancelled" },
+    status: { open: "To Do", todo: "To Do", in_progress: "In Progress", blocked: "Blocked", done: "Done", cancelled: "Cancelled" },
     priority: { none: "Lowest", low: "Low", medium: "Medium", high: "High", urgent: "Highest" },
     assignees: {},
   };

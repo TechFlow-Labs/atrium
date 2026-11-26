@@ -157,7 +157,7 @@ export const tasks = pgTable(
     issueType: text("issue_type"),
     title: text("title").notNull(),
     description: text("description").notNull().default(""),
-    status: text("status").$type<"open" | "in_progress" | "blocked" | "done" | "cancelled">().notNull(),
+    status: text("status").$type<"open" | "todo" | "in_progress" | "blocked" | "done" | "cancelled">().notNull(),
     priority: text("priority").$type<"none" | "low" | "medium" | "high" | "urgent">().notNull(),
     dueAt: timestamp("due_at", { withTimezone: true, mode: "date" }),
     assigneeUserId: text("assignee_user_id"),
